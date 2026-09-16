@@ -1,0 +1,25 @@
+# dependencies
+node_modules
+
+# next.js
+.next/
+
+# env — never commit secrets
+.env*
+
+# harvested live-site snapshots (large, regenerable)
+content/source-snapshot*.json
+
+# typescript
+*.tsbuildinfo
+
+# os
+.DS_Store
+
+# visual polish screenshots
+.polish/
+
+# local agent tooling
+.agents/
+skills-lock.json
+.claude/

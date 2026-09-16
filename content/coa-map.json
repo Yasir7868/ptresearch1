@@ -1,0 +1,141 @@
+{
+  "rt": {
+    "coaUrl": "/coas/PTR-2117436-P-GLP3-RT-purity.pdf",
+    "purity": "99.42%",
+    "label": "PTR-2117436-P",
+    "productId": 630
+  },
+  "sema-glp-1-analog-research-grade-premium-research-peptide": {
+    "coaUrl": "/coas/PTR-4132439-P-GLP1-SM-purity.pdf",
+    "purity": "99.31%",
+    "label": "PTR-4132439-P",
+    "productId": 1022
+  },
+  "tr-2": {
+    "coaUrl": "/coas/PTR-6576021-P-GLP2-TZ-purity.pdf",
+    "purity": "99.2%",
+    "label": "PTR-6576021-P",
+    "productId": 638
+  },
+  "bpc-157-premium-research-peptide-lab-grade-peptide": {
+    "coaUrl": "/coas/PTR-9628420-P-BPC-157-purity.pdf",
+    "purity": "99.42%",
+    "label": "PTR-9628420-P",
+    "productId": 654
+  },
+  "tb-500-premium-research-peptide": {
+    "coaUrl": "/coas/PTR-8408241-P-TB-500-purity.pdf",
+    "purity": "99.34%",
+    "label": "PTR-8408241-P",
+    "productId": 655
+  },
+  "ipamorelin-premium-research-peptide-lab-grade": {
+    "coaUrl": "/coas/PTR-2146000-P-Ipamorelin-purity.pdf",
+    "purity": "99.38%",
+    "label": "PTR-2146000-P",
+    "productId": 652
+  },
+  "cjc-ipamorelin-blend-premium-peptide-set-lab-grade-peptides": {
+    "coaUrl": "/coas/PTR-6465415-P-CJC-1295-Ipamorelin-purity.pdf",
+    "purity": "99.21%",
+    "label": "PTR-6465415-P",
+    "productId": 651
+  },
+  "ghk-cu-premium-research-peptide": {
+    "coaUrl": "/coas/PTR-9372216-P-GHK-Cu-purity.pdf",
+    "purity": "99.58%",
+    "label": "PTR-9372216-P",
+    "productId": 656
+  },
+  "mots-c-premium-research-peptide-lab-grade-peptide": {
+    "coaUrl": "/coas/PTR-1960660-P-MOTS-c-purity.pdf",
+    "purity": "99.36%",
+    "label": "PTR-1960660-P",
+    "productId": 644
+  },
+  "nad-premium-research-compound-lab-grade": {
+    "coaUrl": "/coas/PTR-8026406-P-NAD-purity.pdf",
+    "purity": "99.45%",
+    "label": "PTR-8026406-P",
+    "productId": 648
+  },
+  "dsip-premium-research-peptide-lab-grade-peptide": {
+    "coaUrl": "/coas/PTR-3123996-P-DSIP-purity.pdf",
+    "purity": "99.14%",
+    "label": "PTR-3123996-P",
+    "productId": 647
+  },
+  "glutathione-premium-research-peptide-lab-grade": {
+    "coaUrl": "/coas/PTR-3357280-P-L-Glutathione-purity.pdf",
+    "purity": "99.54%",
+    "label": "PTR-3357280-P",
+    "productId": 659
+  },
+  "mots-c-premium-research-lab-grade-peptide-for-research": {
+    "coaUrl": "/coas/PTR-4692745-P-Selank-purity.pdf",
+    "purity": "99.42%",
+    "label": "PTR-4692745-P",
+    "productId": 643
+  },
+  "melanotan-1-premium-research-peptide-lab-grade-peptide": {
+    "coaUrl": "/coas/PTR-3295184-P-Melanotan-2-purity.pdf",
+    "purity": "99.21%",
+    "label": "PTR-3295184-P",
+    "productId": 629
+  },
+  "tesamorelin-premium-research-peptides": {
+    "coaUrl": "/coas/PTR-1700427-P-Tesamorelin-purity.pdf",
+    "purity": "99.39%",
+    "label": "PTR-1700427-P",
+    "productId": 3323
+  },
+  "semax-premium-research-peptide-lab-grade-peptide": {
+    "coaUrl": "/coas/PTR-4383620-P-Semax-purity.pdf",
+    "purity": "99.34%",
+    "label": "PTR-4383620-P",
+    "productId": 642
+  },
+  "glow-blend-premium-research-peptides": {
+    "coaUrl": "/coas/PTR-6055127-P-GLOW-purity.pdf",
+    "purity": "99.27%",
+    "label": "PTR-6055127-P",
+    "productId": 1849
+  },
+  "klow-blend-premium-research-compound-lab-grade": {
+    "coaUrl": "/coas/PTR-2431473-P-KLOW-purity.pdf",
+    "purity": "99.16%",
+    "label": "PTR-2431473-P",
+    "componentCoaUrl": "/coas/PTR-5154196-P-KPV-purity.pdf",
+    "productId": 658
+  },
+  "_meta": {
+    "source": "Official updated purity-certificate set supplied by the client (batch date 2026-07-17), replacing the prior hotlinked WordPress certificates. The 19 purity PDFs are now self-hosted under public/coas/. purity = measured UPLC/MS value parsed directly from each certificate; label = certificate lot number (batch id) \u2014 the trust signal.",
+    "updated": "2026-07-22",
+    "coaUrl_note": "coaUrl = self-hosted purity-certificate PDF under /coas/ (no more hotlinking the client's WP). This official set is PURITY certificates only; the prior (partly mislabeled) hotlinked endotoxin URLs have been removed. Spec on every cert is >98% (blends >=98%). For multi-component blend certs the recorded purity is the LOWEST component purity (most conservative honest figure); per-component values are in data_quality_flags.",
+    "glp_coding_note": "HARD RULE #1 \u2014 GLP-compound trade names are coded and NEVER written expanded anywhere in this repo. The source zip filenames carried expanded trade names; PDFs were extracted to a scratch dir OUTSIDE the repo, renamed to coded form (GLP1-SM / GLP2-TZ / GLP3-RT), and only then copied into public/coas/. All coaUrl paths and local filenames are coded. Verified via repo-wide grep: zero expanded-name leaks.",
+    "data_quality_flags": [
+      "Selank slug is misnamed: store slug 'mots-c-premium-research-lab-grade-peptide-for-research' (id 643) sells the product 'Selank'. The paired cert (PTR-4692745-P, compound Selank) matches the product NAME, not the slug. Pairing verified by product name.",
+      "Melanotan slug is misnamed: store slug 'melanotan-1-premium-research-peptide-lab-grade-peptide' (id 629) sells the product 'Melanotan II' (MT-2). The paired cert (PTR-3295184-P, compound 'Melanotan 2 (MT-2)') matches the product NAME, not the 'melanotan-1' slug. Pairing verified by product name.",
+      "Two live slugs both begin 'mots-c-...': id 644 is the real MOTS-C (cert PTR-1960660-P); id 643 is Selank (cert PTR-4692745-P). Do not swap them.",
+      "Blend purity convention: CJC-IPAMORELIN (651) cert PTR-6465415-P components Ipamorelin 99.21% / CJC-1295 no DAC 99.28% -> recorded 99.21%. GLOW (1849) cert PTR-6055127-P components BPC-157 99.31% / TB-500 99.27% / GHK-Cu 99.56% -> recorded 99.27%. KLOW (658) cert PTR-2431473-P components BPC-157 99.25% / TB-500 99.16% / GHK-Cu 99.56% / KPV 99.21% -> recorded 99.16%.",
+      "KPV has no standalone product; it is a component of the KLOW blend. Its standalone certificate (PTR-5154196-P, 99.23%) is hosted on the klow entry as componentCoaUrl (additive field; UI may ignore it for now)."
+    ]
+  },
+  "_unmatched": {
+    "vip-premium-research-peptide-lab-grade-peptide": {
+      "name": "VIP \u2013 Premium Research Peptide",
+      "id": 646,
+      "reason": "no purity certificate in the official updated set"
+    },
+    "bpc-157-tb-500-premium-research-peptide-set-lab-grade": {
+      "name": "BPC-157 + TB-500 Combo \u2013 Premium Research Peptide Set",
+      "id": 653,
+      "reason": "no standalone combo purity certificate in the official updated set (the individual BPC-157 and TB-500 certs are published separately)"
+    },
+    "bacteriostatic-water-usp-grade": {
+      "name": "Bacteriostatic Water (USP Grade)",
+      "id": 662,
+      "reason": "not a peptide; no purity certificate"
+    }
+  }
+}
