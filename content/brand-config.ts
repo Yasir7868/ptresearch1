@@ -15,14 +15,14 @@ export const brandConfig = {
   /** Live store domain (source of product imagery + canonical copy) */
   domain: "ptresearch.shop",
 
-  /** Verbatim client tagline */
-  tagline: "Where Innovation Meets Research Excellence",
+  /** Verbatim client tagline (live homepage brand block, 2026-09-17) */
+  tagline: "Empowering Ideas Through Research",
 
   /** Verbatim client hero copy — do not rewrite */
   hero: {
     headline: "Premium-Grade Peptides",
     subhead:
-      "At Primetime Research, we're committed to providing researchers with the highest quality peptides and peptide blends in the industry.",
+      "At Primetime Research, we’re committed to providing researchers with the highest quality peptides and peptide blends in the industry.",
   },
 
   /**
@@ -81,6 +81,43 @@ export const brandConfig = {
     warnWash: "#FDEEE2",
     /** Cool brick red — form errors, decline — 5.8:1 on paper */
     error: "#B3341C",
+
+    /* 2026-09 CRO redesign — the homepage + site chrome (header, research
+       bar, footer) from the Claude Design file "Primetime Research.dc.html".
+       Scoped to those surfaces; the tokens above still drive every other
+       page. See DESIGN.md §0. */
+    /** Page ground behind the redesigned homepage */
+    mist: "#F4F7FB",
+    /** Headings + primary text on light */
+    navyInk: "#0B1B33",
+    /** Hero + closing CTA band ground */
+    midnight: "#061428",
+    /** Structural navy — research bar, cart button, badges, COA button */
+    navy: "#1E3A6E",
+    /** Primary action blue — CTAs, links, kickers — 7.0:1 on white */
+    cobalt: "#1E5AA8",
+    /** Hover for cobalt */
+    cobaltBright: "#2B6FCC",
+    /** Highlight type on midnight */
+    azure: "#7FB3FF",
+    /** Card + section borders */
+    rule: "#E1E8F2",
+    /** Secondary text, struck-through prices — 5.4:1 on white */
+    steel: "#5A6B85",
+    /** Body copy on light */
+    steelInk: "#41506A",
+    /** Vial field behind product photographs */
+    frost: "#F7FAFD",
+    /** Footer ground */
+    ice: "#EAF3FB",
+    /** Footer rules */
+    iceRule: "#D6E3F1",
+    /** Labels + sublines on midnight */
+    haze: "#9FB3D1",
+    /** Hero body copy on midnight */
+    hazeLight: "#C9D6EA",
+    /** Hero pill text on midnight */
+    hazePale: "#BFD4F5",
   },
 
   /**
@@ -98,23 +135,29 @@ export const brandConfig = {
   },
 
   /**
-   * Live promos — verbatim from client copy. Cart math constants live here so
-   * the LocalStorage cart adapter and promo UI read the same values.
-   * Prices/amounts are integer minor units (cents).
+   * Live promos — verbatim from the live site (2026-09-17). Cart math
+   * constants live here so the LocalStorage cart adapter and promo UI read the
+   * same values. Prices/amounts are integer minor units (cents).
+   *
+   * - coupon: the "LIMITED OFFER" banner at the top of every live page except
+   *   the homepage ("USE CODE: PT25" / "25% off all Research Compounds").
+   * - freeShipping + shippingSpeed: the homepage strip, rendered live as
+   *   "2-Day Shipping | Free Shipping $200+".
+   * The "Buy One Get One 50% Off" banner is hidden on the live site and the
+   * live cart no longer applies it, so it is not offered here.
    */
   promos: {
-    bogo: {
-      label: "Buy One Get One 50% Off",
-      detail: "auto-applied at checkout",
-    },
     coupon: {
       code: "PT25",
       percentOff: 25,
-      label: "Code PT25 — 25% off",
+      badge: "LIMITED OFFER",
+      codeLabel: "USE CODE:",
+      detail: "25% off all Research Compounds",
+      cta: "Shop Now",
     },
     freeShipping: {
       thresholdMinor: 20000,
-      label: "Free shipping over $200",
+      label: "Free Shipping $200+",
     },
     shippingSpeed: {
       label: "2-Day Shipping",

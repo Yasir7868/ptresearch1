@@ -14,7 +14,8 @@ export default function robots(): MetadataRoute.Robots {
   }
 
   return {
-    rules: { userAgent: "*", allow: "/" },
+    // The admin panel also sends X-Robots-Tag: noindex (proxy.ts).
+    rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/api/"] },
     sitemap: `${SITE_URL}/sitemap.xml`,
     host: SITE_URL,
   };

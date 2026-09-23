@@ -7,12 +7,19 @@
  * learned-color rule (never amber).
  *
  * Server-safe (no client JS). `label={false}` gives the compact dot-only form
- * for dense contexts (cart line items); the default shows the word.
+ * for dense contexts (cart line items); the default shows the live site's
+ * "3rd Party Tested" badge title.
  */
 import { cn } from "@/lib/utils";
+import { trustBadges } from "@/content/site-copy";
+
+/** "3rd Party Tested" — the live homepage trust badge title. */
+const THIRD_PARTY_TESTED =
+  trustBadges.find((b) => b.title.startsWith("3rd Party"))?.title ??
+  "3rd Party Tested";
 
 export function VerifiedMark({
-  label = "Verified",
+  label = THIRD_PARTY_TESTED,
   className,
 }: {
   /** Text to show after the check; pass false for the dot-only compact form. */
@@ -41,10 +48,11 @@ export function VerifiedMark({
         <circle cx="8" cy="8" r="6.4" />
         <path d="M5.4 8.1 7.1 9.8 10.7 6.2" />
       </svg>
-      {label !== false && <span>{label}</span>}
-      <span className="sr-only">
-        Third-party purity certificate available
-      </span>
+      {label !== false ? (
+        <span>{label}</span>
+      ) : (
+        <span className="sr-only">{THIRD_PARTY_TESTED}</span>
+      )}
     </span>
   );
 }

@@ -9,8 +9,11 @@
  * SAME shared components /cart and /checkout use (components/checkout/*), so
  * the drawer and the full-page cart can never drift.
  *
+ * Copy follows the live side cart ("Your Cart", "View Cart", "Continue
+ * Shopping", "Shipping, taxes, and discounts calculated at checkout.").
+ *
  * NOTE on totals: everything shown here comes from context.totals, which is
- * ADAPTER-CANONICAL. Today the LocalStorage adapter computes BOGO-50% / PT25 /
+ * ADAPTER-CANONICAL. Today the LocalStorage adapter computes PT25 /
  * free-shipping locally; the future WooCommerce adapter returns SERVER-
  * canonical totals (WC Store API) and this component needs zero changes.
  */
@@ -27,12 +30,11 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useCart, type CartItem } from "@/lib/cart";
-import { brandConfig } from "@/content/brand-config";
-import { compliance } from "@/content/compliance";
+import { sideCartCopy } from "@/content/site-copy";
 import { formatMinor } from "@/components/checkout/money";
 import { TotalsLedger } from "@/components/checkout/TotalsLedger";
+import { LineMeta } from "@/components/checkout/LineMeta";
 import { FreeShippingProgress } from "@/components/checkout/FreeShippingProgress";
-import { unitCountOf } from "@/components/checkout/demo-order";
 import { VerifiedMark } from "@/components/plate/VerifiedMark";
 import { hasVerifiedCoa } from "@/components/checkout/coa-lookup";
 
@@ -42,7 +44,8 @@ function LineItem({ item }: { item: CartItem }) {
 
   return (
     <li className="flex gap-3 py-4">
-      {/* Thumb — a mini specimen field: soft-rounded, hairline frame, duotoned vial */}
+      {/* Thumb — a mini specimen field: soft-rounded, hairline frame, true-colour
+          vial (matches the catalog card it was added from; DESIGN §5). */}
       <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-hairline/70 bg-surface">
         {item.image ? (
           <Image
@@ -50,7 +53,7 @@ function LineItem({ item }: { item: CartItem }) {
             alt={item.name}
             fill
             sizes="56px"
-            className="duotone object-cover"
+            className="object-cover"
           />
         ) : (
           <div className="flex h-full items-center justify-center">
@@ -81,6 +84,8 @@ function LineItem({ item }: { item: CartItem }) {
           {hasVerifiedCoa(item.productId) && <VerifiedMark label={false} />}
         </div>
 
+        <LineMeta item={item} />
+
         {item.qty > 1 && (
           <p className="data-mono text-[11px] text-ink-muted">
             {formatMinor(item.price, mu)} each
@@ -88,28 +93,35 @@ function LineItem({ item }: { item: CartItem }) {
         )}
 
         <div className="flex items-center justify-between">
-          {/* Qty stepper */}
-          <div className="flex items-center rounded-lg border border-hairline">
-            <button
-              type="button"
-              aria-label="Decrease quantity"
-              className="flex size-7 items-center justify-center text-ink-muted transition-colors hover:text-ink"
-              onClick={() => void updateQty(item.key, item.qty - 1)}
-            >
-              <MinusIcon className="size-3" />
-            </button>
-            <span className="data-mono w-7 text-center text-xs text-ink">
+          {/* Qty stepper — retired on a sold-individually line (a gift card),
+              which is always exactly one. */}
+          {item.soldIndividually ? (
+            <span className="data-mono rounded-lg border border-hairline px-2 py-1 text-xs text-ink-muted">
               {item.qty}
             </span>
-            <button
-              type="button"
-              aria-label="Increase quantity"
-              className="flex size-7 items-center justify-center text-ink-muted transition-colors hover:text-ink"
-              onClick={() => void updateQty(item.key, item.qty + 1)}
-            >
-              <PlusIcon className="size-3" />
-            </button>
-          </div>
+          ) : (
+            <div className="flex items-center rounded-lg border border-hairline">
+              <button
+                type="button"
+                aria-label="Decrease quantity"
+                className="flex size-7 items-center justify-center text-ink-muted transition-colors hover:text-ink"
+                onClick={() => void updateQty(item.key, item.qty - 1)}
+              >
+                <MinusIcon className="size-3" />
+              </button>
+              <span className="data-mono w-7 text-center text-xs text-ink">
+                {item.qty}
+              </span>
+              <button
+                type="button"
+                aria-label="Increase quantity"
+                className="flex size-7 items-center justify-center text-ink-muted transition-colors hover:text-ink"
+                onClick={() => void updateQty(item.key, item.qty + 1)}
+              >
+                <PlusIcon className="size-3" />
+              </button>
+            </div>
+          )}
 
           <span className="data-mono text-sm text-ink">
             {formatMinor(item.price * item.qty, mu)}
@@ -139,29 +151,30 @@ export function CartDrawer({
       >
         <SheetHeader className="hairline-b">
           <SheetTitle className="flex items-baseline gap-2 text-ink">
-            Cart
-            <span className="micro-label">
-              {count} {count === 1 ? "item" : "items"}
-            </span>
+            {sideCartCopy.title}
+            <span className="micro-label">{count}</span>
           </SheetTitle>
-          <SheetDescription className="micro-label pt-1">
-            {compliance.ruoBanner}
+          <SheetDescription className="sr-only">
+            {items.length === 0 ? sideCartCopy.empty : sideCartCopy.note}
           </SheetDescription>
         </SheetHeader>
 
         {items.length === 0 ? (
           /* Empty state */
           <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-            <p className="micro-label">Your cart is empty</p>
-            <p className="max-w-[26ch] text-sm text-ink-muted">
-              Research compounds you add will appear here.
-            </p>
-            {/* Primary (accent) — the drawer's one CTA when empty */}
-            <Button asChild className="mt-2">
-              <Link href="/catalog" onClick={() => onOpenChange(false)}>
-                Browse the catalog
-              </Link>
-            </Button>
+            <p className="micro-label">{sideCartCopy.empty}</p>
+            <div className="mt-2 flex flex-col gap-2">
+              <Button asChild>
+                <Link href="/catalog" onClick={() => onOpenChange(false)}>
+                  {sideCartCopy.returnToShop}
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/catalog" onClick={() => onOpenChange(false)}>
+                  {sideCartCopy.continueShopping}
+                </Link>
+              </Button>
+            </div>
           </div>
         ) : (
           <>
@@ -179,22 +192,26 @@ export function CartDrawer({
 
             {/* Totals — shared ledger rows (adapter-canonical) */}
             <div className="hairline-t px-4 py-4">
-              <TotalsLedger totals={totals} unitCount={unitCountOf(items)} />
-
-              <Button asChild className="mt-4 h-10 w-full">
-                <Link href="/checkout" onClick={() => onOpenChange(false)}>
-                  Checkout
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="mt-2 h-10 w-full">
-                <Link href="/cart" onClick={() => onOpenChange(false)}>
-                  View full cart
-                </Link>
-              </Button>
-              <p className="micro-label mt-3 text-center">
-                {brandConfig.promos.bogo.label} —{" "}
-                {brandConfig.promos.bogo.detail}
+              <TotalsLedger totals={totals} />
+              <p className="mt-3 text-[12px] leading-relaxed text-ink-muted">
+                {sideCartCopy.note}
               </p>
+
+              <Button asChild variant="outline" className="mt-4 h-10 w-full">
+                <Link href="/cart" onClick={() => onOpenChange(false)}>
+                  {sideCartCopy.viewCart}
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" className="mt-2 h-10 w-full">
+                <Link href="/catalog" onClick={() => onOpenChange(false)}>
+                  {sideCartCopy.continueShopping}
+                </Link>
+              </Button>
+              <Button asChild className="mt-2 h-10 w-full">
+                <Link href="/checkout" onClick={() => onOpenChange(false)}>
+                  {sideCartCopy.checkout}
+                </Link>
+              </Button>
             </div>
           </>
         )}

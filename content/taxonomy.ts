@@ -24,62 +24,66 @@
 export interface Category {
   slug: string;
   name: string;
-  /** One-sentence clinical-tone description. */
+  /** One-sentence description of the research field, lab-framed. */
   blurb: string;
 }
 
 /**
- * The 8 categories, in display order. Order is intentional: therapeutic
- * groupings first, blends and lab supplies last. (Growth Factors was retired
- * 2026-07-21 — the store removed all three of its products: IGF-1, IGF-DES,
- * Follistatin.)
+ * The 8 categories, in display order. Each is named for the RESEARCH FIELD or
+ * mechanism a compound is studied in, never for an effect on a person (no
+ * healing, longevity, cosmetic or nootropic framing): every product is sold
+ * for laboratory research only. Renamed 2026-09-19 at the owner's request;
+ * the old slugs were healing-recovery, metabolic-glp, gh-secretagogues,
+ * nootropic-neuro, longevity-cellular, cosmetic-pigmentation and
+ * blends-stacks. (Growth Factors was retired 2026-07-21 — the store removed
+ * IGF-1, IGF-DES and Follistatin.)
  */
 export const CATEGORIES: readonly Category[] = [
   {
-    slug: "healing-recovery",
-    name: "Healing & Recovery",
+    slug: "tissue-regeneration-research",
+    name: "Tissue Regeneration Research",
     blurb:
-      "Peptides studied for tissue repair, angiogenesis, and regenerative response in laboratory models.",
+      "Peptides studied in laboratory models of tissue repair, angiogenesis, and cell migration.",
   },
   {
-    slug: "metabolic-glp",
-    name: "Metabolic & GLP",
+    slug: "metabolic-research",
+    name: "Metabolic Research",
     blurb:
-      "Incretin and metabolic research compounds investigated for glucose regulation, energy expenditure, and receptor pharmacology.",
+      "Incretin-receptor and metabolic compounds for laboratory studies of glucose signaling, energy pathways, and receptor pharmacology.",
   },
   {
-    slug: "gh-secretagogues",
-    name: "GH Secretagogues",
+    slug: "endocrine-research",
+    name: "Endocrine Research",
     blurb:
-      "GHRH analogues and growth-hormone secretagogues used to study pituitary GH secretion dynamics.",
+      "GHRH analogues and secretagogues used to study pituitary signaling and hormone-release dynamics in laboratory models.",
   },
   {
-    slug: "nootropic-neuro",
-    name: "Nootropic & Neuro",
+    slug: "neuropeptide-research",
+    name: "Neuropeptide Research",
     blurb:
-      "Neuroactive peptides examined for effects on cognition, neuroprotection, and sleep architecture in research settings.",
+      "Neuroactive peptides studied in laboratory models of neuronal signaling and sleep regulation.",
   },
   {
-    slug: "longevity-cellular",
-    name: "Longevity & Cellular",
+    slug: "cellular-mitochondrial-research",
+    name: "Cellular & Mitochondrial Research",
     blurb:
-      "Compounds studied for cellular energetics, redox balance, and aging-related pathways.",
+      "Compounds studied in vitro for cellular energetics, redox balance, and mitochondrial function.",
   },
   {
-    slug: "cosmetic-pigmentation",
-    name: "Cosmetic & Pigmentation",
+    slug: "melanocortin-dermal-research",
+    name: "Melanocortin & Dermal Research",
     blurb:
-      "Melanocortin and copper-peptide compounds researched for pigmentation and dermal applications.",
+      "Melanocortin-receptor and copper-peptide compounds studied in laboratory models of melanogenesis and dermal tissue.",
   },
   {
-    slug: "blends-stacks",
-    name: "Blends & Stacks",
+    slug: "research-blends",
+    name: "Multi-Peptide Research Blends",
     blurb:
-      "Multi-peptide research blends combining complementary compounds in a single lyophilized preparation.",
+      "Research blends combining complementary compounds in a single lyophilized preparation.",
   },
   {
     slug: "lab-supplies",
-    name: "Lab Supplies",
+    name: "Laboratory Supplies",
     blurb:
       "Reconstitution solvents and ancillary consumables for peptide research workflows.",
   },
@@ -118,49 +122,49 @@ interface Assignment {
  * Comments note the human-readable product.
  */
 export const PRODUCT_CATEGORY_MAP: Record<string, Assignment> = {
-  // --- Healing & Recovery ---
-  "bpc-157-premium-research-peptide-lab-grade-peptide": { primary: "healing-recovery" }, // BPC-157
-  "tb-500-premium-research-peptide": { primary: "healing-recovery" }, // TB-500
+  // --- Tissue Regeneration Research ---
+  "bpc-157-premium-research-peptide-lab-grade-peptide": { primary: "tissue-regeneration-research" }, // BPC-157
+  "tb-500-premium-research-peptide": { primary: "tissue-regeneration-research" }, // TB-500
   "ghk-cu-premium-research-peptide": {
-    primary: "healing-recovery",
-    secondary: ["cosmetic-pigmentation"],
+    primary: "tissue-regeneration-research",
+    secondary: ["melanocortin-dermal-research"],
   }, // GHK-Cu
-  "vip-premium-research-peptide-lab-grade-peptide": { primary: "healing-recovery" }, // VIP
+  "vip-premium-research-peptide-lab-grade-peptide": { primary: "tissue-regeneration-research" }, // VIP
 
-  // --- Metabolic & GLP ---
-  "sema-glp-1-analog-research-grade-premium-research-peptide": { primary: "metabolic-glp" }, // GLP1-SM
-  "tr-2": { primary: "metabolic-glp" }, // GLP2-TZ
-  "rt": { primary: "metabolic-glp" }, // GLP3-RT
-  "mots-c-premium-research-peptide-lab-grade-peptide": { primary: "metabolic-glp" }, // MOTS-C
+  // --- Metabolic Research ---
+  "sema-glp-1-analog-research-grade-premium-research-peptide": { primary: "metabolic-research" }, // GLP1-SM
+  "tr-2": { primary: "metabolic-research" }, // GLP2-TZ
+  "rt": { primary: "metabolic-research" }, // GLP3-RT
+  "mots-c-premium-research-peptide-lab-grade-peptide": { primary: "metabolic-research" }, // MOTS-C
 
-  // --- GH Secretagogues ---
-  "tesamorelin-premium-research-peptides": { primary: "gh-secretagogues" }, // Tesamorelin
-  "ipamorelin-premium-research-peptide-lab-grade": { primary: "gh-secretagogues" }, // Ipamorelin
+  // --- Endocrine Research ---
+  "tesamorelin-premium-research-peptides": { primary: "endocrine-research" }, // Tesamorelin
+  "ipamorelin-premium-research-peptide-lab-grade": { primary: "endocrine-research" }, // Ipamorelin
   "cjc-ipamorelin-blend-premium-peptide-set-lab-grade-peptides": {
-    primary: "gh-secretagogues",
-    secondary: ["blends-stacks"],
+    primary: "endocrine-research",
+    secondary: ["research-blends"],
   }, // CJC-Ipamorelin
 
-  // --- Nootropic & Neuro ---
-  "semax-premium-research-peptide-lab-grade-peptide": { primary: "nootropic-neuro" }, // Semax
-  "mots-c-premium-research-lab-grade-peptide-for-research": { primary: "nootropic-neuro" }, // Selank (misleading slug — verified by id 643)
-  "dsip-premium-research-peptide-lab-grade-peptide": { primary: "nootropic-neuro" }, // DSIP
+  // --- Neuropeptide Research ---
+  "semax-premium-research-peptide-lab-grade-peptide": { primary: "neuropeptide-research" }, // Semax
+  "mots-c-premium-research-lab-grade-peptide-for-research": { primary: "neuropeptide-research" }, // Selank (misleading slug — verified by id 643)
+  "dsip-premium-research-peptide-lab-grade-peptide": { primary: "neuropeptide-research" }, // DSIP
 
-  // --- Longevity & Cellular ---
-  "nad-premium-research-compound-lab-grade": { primary: "longevity-cellular" }, // NAD+
-  "glutathione-premium-research-peptide-lab-grade": { primary: "longevity-cellular" }, // Glutathione
+  // --- Cellular & Mitochondrial Research ---
+  "nad-premium-research-compound-lab-grade": { primary: "cellular-mitochondrial-research" }, // NAD+
+  "glutathione-premium-research-peptide-lab-grade": { primary: "cellular-mitochondrial-research" }, // Glutathione
 
-  // --- Cosmetic & Pigmentation ---
+  // --- Melanocortin & Dermal Research ---
   // Slug unchanged ("melanotan-1-…", id 629) but the live display name is now
   // "Melanotan II" — categorization is by SLUG, so the mapping holds.
-  "melanotan-1-premium-research-peptide-lab-grade-peptide": { primary: "cosmetic-pigmentation" }, // Melanotan II
+  "melanotan-1-premium-research-peptide-lab-grade-peptide": { primary: "melanocortin-dermal-research" }, // Melanotan II
 
-  // --- Blends & Stacks ---
-  "glow-blend-premium-research-peptides": { primary: "blends-stacks" }, // Glow Blend (BPC-157/TB-500/GHK-Cu)
-  "klow-blend-premium-research-compound-lab-grade": { primary: "blends-stacks" }, // Klow Blend (KPV/BPC-157/TB-500/GHK-Cu)
-  "bpc-157-tb-500-premium-research-peptide-set-lab-grade": { primary: "blends-stacks" }, // BPC-157 + TB-500 Combo
+  // --- Multi-Peptide Research Blends ---
+  "glow-blend-premium-research-peptides": { primary: "research-blends" }, // Glow Blend (BPC-157/TB-500/GHK-Cu)
+  "klow-blend-premium-research-compound-lab-grade": { primary: "research-blends" }, // Klow Blend (KPV/BPC-157/TB-500/GHK-Cu)
+  "bpc-157-tb-500-premium-research-peptide-set-lab-grade": { primary: "research-blends" }, // BPC-157 + TB-500 Combo
 
-  // --- Lab Supplies ---
+  // --- Laboratory Supplies ---
   "bacteriostatic-water-usp-grade": { primary: "lab-supplies" }, // Bacteriostatic Water (USP Grade)
 };
 

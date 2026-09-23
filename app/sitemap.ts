@@ -15,6 +15,8 @@ import { CATEGORIES } from "@/content/taxonomy";
 const STATIC_ROUTES = [
   "",
   "/catalog",
+  "/gift-card",
+  "/bulk",
   "/coa",
   "/faq",
   "/about",

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.13"
   },
   "scripts": {
     "dev": "next dev",
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "gen:theme": "node scripts/gen-theme.mjs",
     "coa:thumbs": "node scripts/coa-thumbs.mjs",
-    "data:check": "node scripts/data-check.mjs"
+    "data:check": "node scripts/data-check.mjs",
+    "admin:user": "node scripts/admin-user.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

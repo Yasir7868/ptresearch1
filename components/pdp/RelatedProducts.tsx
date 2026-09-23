@@ -1,63 +1,61 @@
 /**
- * RelatedProducts — 3–4 same-category compounds as MINI SPECIMEN PLATES
- * (DESIGN §4: the plate is the product card everywhere). Server Component;
+ * RelatedProducts — the live template's "Related Products" section: a Poppins
+ * heading over the loop carousel (RelatedCarousel). Server Component;
  * selection happens here from the already-cached catalog.
  *
- * DUOTONE DECISION: these plates are a DECORATIVE catalog context — the buyer
- * inspects true color on the main gallery plate above, so the related vials
- * take the full duotone treatment (SpecimenPlate default) and read as one
- * collection. Crop ticks stay ink (chromatic-restraint rule — a 4-up grid of
- * amber ticks would blow the three-chromatic-elements budget).
+ * The live carousel holds six products. Selection order: same primary
+ * category first, then products sharing any of the current product's
+ * secondary categories, then catalog order — always excluding the product
+ * itself. Returns null when nothing qualifies.
  *
- * The VerifiedMark is EARNED: it renders only where a real coaUrl exists.
- *
- * Selection order: same primary category first, then products sharing any of
- * the current product's secondary categories, then catalog order — always
- * excluding the product itself. Returns null when nothing qualifies.
+ * `current` is omitted on /gift-card: the gift card is not a catalog product
+ * and has no category, so its carousel is simply the first six in catalog
+ * order (the live page's own related row is likewise category-less — the
+ * store leaves the gift card "Uncategorized").
  */
 
-import { SpecimenPlate } from "@/components/plate/SpecimenPlate";
 import type { Product } from "@/lib/woo/types";
-import { formatMinor } from "./money";
+import { productPage } from "@/content/site-copy";
+import { RelatedCarousel, type RelatedItem } from "./RelatedCarousel";
 
-const MAX_RELATED = 4;
-const MIN_RELATED = 3;
+const RELATED_COUNT = 6;
 
-/** Pick up to 4 related products for the given product. */
-function pickRelated(catalog: Product[], current: Product): Product[] {
+/** Pick up to six related products for the given product, or the first six. */
+function pickRelated(catalog: Product[], current?: Product): Product[] {
+  if (!current) return catalog.slice(0, RELATED_COUNT);
+
   const rest = catalog.filter((p) => p.slug !== current.slug);
+  const wanted = new Set([current.categorySlug, ...current.secondaryCategories]);
 
-  const sameCategory = rest.filter(
-    (p) => p.categorySlug === current.categorySlug
-  );
+  const ranked = [
+    ...rest.filter((p) => p.categorySlug === current.categorySlug),
+    ...rest.filter(
+      (p) => wanted.has(p.categorySlug) || p.secondaryCategories.some((s) => wanted.has(s))
+    ),
+    ...rest,
+  ];
+  return [...new Set(ranked)].slice(0, RELATED_COUNT);
+}
 
-  const related = [...sameCategory];
-
-  if (related.length < MIN_RELATED) {
-    const wanted = new Set([
-      current.categorySlug,
-      ...current.secondaryCategories,
-    ]);
-    for (const p of rest) {
-      if (related.length >= MIN_RELATED) break;
-      if (related.includes(p)) continue;
-      if (
-        wanted.has(p.categorySlug) ||
-        p.secondaryCategories.some((s) => wanted.has(s))
-      ) {
-        related.push(p);
-      }
-    }
-  }
-
-  if (related.length < MIN_RELATED) {
-    for (const p of rest) {
-      if (related.length >= MIN_RELATED) break;
-      if (!related.includes(p)) related.push(p);
-    }
-  }
-
-  return related.slice(0, MAX_RELATED);
+function toItem(p: Product): RelatedItem {
+  const img = p.images[0];
+  return {
+    productId: p.productId,
+    sku: p.sku,
+    slug: p.slug,
+    name: p.displayName,
+    image: img ? { src: img.src, alt: img.alt } : undefined,
+    kind: p.kind,
+    available: p.isPurchasable && p.isInStock,
+    onSale: p.onSale,
+    priceMinor: p.priceMinor,
+    regularPriceMinor: p.regularPriceMinor,
+    currencyMinorUnit: p.currencyMinorUnit,
+    variations: p.variations?.map((v) => ({
+      priceMinor: v.priceMinor,
+      regularPriceMinor: v.regularPriceMinor,
+    })),
+  };
 }
 
 export function RelatedProducts({
@@ -65,7 +63,7 @@ export function RelatedProducts({
   current,
 }: {
   catalog: Product[];
-  current: Product;
+  current?: Product;
 }) {
   const related = pickRelated(catalog, current);
   if (related.length === 0) return null;
@@ -73,51 +71,15 @@ export function RelatedProducts({
   return (
     <section
       aria-labelledby="pdp-related"
-      className="hairline-t py-12 md:py-16"
+      className="bg-white px-[6%] pt-[34px] pb-12 md:px-[4%] md:pt-[67px]"
     >
-      <p className="micro-label mb-3">{current.categoryName}</p>
-      <h2 id="pdp-related" className="text-[clamp(1.9rem,3.4vw,3rem)] text-ink">
-        Related compounds
+      <h2
+        id="pdp-related"
+        className="mb-[50px] font-poppins text-[28px] leading-[1.1] font-semibold text-[#1c244b] md:mb-[19px] md:text-[45px] md:leading-[1.2] lg:text-[49px]"
+      >
+        {productPage.relatedHeading}
       </h2>
-
-      <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
-        {related.map((p) => {
-          const img = p.images[0];
-          return (
-            <SpecimenPlate
-              key={p.slug}
-              href={`/product/${p.slug}`}
-              ariaLabel={`${p.displayName} — view product`}
-              // Duotone stays ON (default) — decorative context, see header.
-              {...(img
-                ? { image: { src: img.src, alt: img.alt } }
-                : {
-                    field: (
-                      <span className="micro-label">{p.displayName}</span>
-                    ),
-                  })}
-              imageSizes="(min-width: 1024px) 280px, (min-width: 640px) 45vw, 90vw"
-              eyebrow={p.categoryName}
-              title={p.displayName}
-              record={
-                <>
-                  {p.purity && (
-                    <>
-                      <span className="text-green">{p.purity}</span>
-                      <span aria-hidden="true"> · </span>
-                    </>
-                  )}
-                  {p.kind === "variable" && (
-                    <span className="font-normal">From </span>
-                  )}
-                  {formatMinor(p.priceMinor, p.currencyMinorUnit)}
-                </>
-              }
-              verified={Boolean(p.coaUrl)}
-            />
-          );
-        })}
-      </div>
+      <RelatedCarousel items={related.map(toItem)} label={productPage.relatedHeading} />
     </section>
   );
 }

@@ -26,23 +26,10 @@ import type {
   FaqItem,
   CoaMap,
   CoaEntry,
+  RichParagraph,
+  TextRun,
+  VariationPrice,
 } from "./types";
-import localVialManifest from "../../content/product-images.json" with { type: "json" };
-
-// ---------------------------------------------------------------------------
-// Local studio vial images (content/product-images.json)
-// ---------------------------------------------------------------------------
-
-/**
- * slug -> local public path ("/product-vials/<slug>.webp") for products whose
- * navy-branded studio vial shot exists in public/product-vials/. When present,
- * the local image is PREPENDED as images[0] (card + PDP primary) and the Woo
- * images follow (the PDP thumb strip keeps the true-color originals). Missing
- * slugs gracefully fall back to Woo images alone. Local filenames are coded
- * (slug-derived), so the EXPANDED_GLP_RE filter below applies to Woo images
- * only — it never needs to inspect local paths.
- */
-const LOCAL_VIALS: Record<string, string> = localVialManifest;
 
 // ---------------------------------------------------------------------------
 // GLP display-name coding (HARD RULE)
@@ -96,6 +83,54 @@ export function codeDisplayName(id: number, rawName: string): string {
   return cleaned;
 }
 
+/** True when a string (name, note, image URL) carries an expanded GLP name. */
+export function containsExpandedGlpName(value: string): boolean {
+  return EXPANDED_GLP_RE.test(value);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Build a coder for FREE TEXT that comes back from WooCommerce — order notes
+ * ("Stock levels reduced: <product> …"), order line names, customer notes —
+ * which can carry raw live product names. Used by the admin panel.
+ *
+ * `catalog` is the live product list fetched at runtime, so no expanded name
+ * is ever written in this repo: each GLP product's raw live name is replaced
+ * with its coded display name, then any expanded trade name still left is
+ * replaced with the coded name of the catalog product whose raw name contains
+ * it, or a neutral "GLP compound".
+ */
+export function createGlpTextCoder(
+  catalog: ReadonlyArray<{ id: number; name: string }>
+): (text: string) => string {
+  const pairs = catalog
+    .map((p) => ({ id: p.id, raw: p.name.trim(), coded: codeDisplayName(p.id, p.name) }))
+    .filter(
+      (p) =>
+        p.raw &&
+        p.raw !== p.coded &&
+        (DISPLAY_NAME_OVERRIDES[p.id] !== undefined ||
+          EXPANDED_GLP_RE.test(p.raw) ||
+          /^sema\b/i.test(p.raw))
+    )
+    .sort((a, b) => b.raw.length - a.raw.length)
+    .map((p) => ({ ...p, re: new RegExp(escapeRegExp(p.raw), "gi") }));
+  const tokenRe = new RegExp(EXPANDED_GLP_RE.source, "gi");
+
+  return (text: string): string => {
+    if (!text) return text;
+    let out = text;
+    for (const pair of pairs) out = out.replace(pair.re, pair.coded);
+    return out.replace(tokenRe, (match) => {
+      const owner = pairs.find((p) => p.raw.toLowerCase().includes(match.toLowerCase()));
+      return owner ? owner.coded : "GLP compound";
+    });
+  };
+}
+
 // ---------------------------------------------------------------------------
 // HTML helpers (dependency-free)
 // ---------------------------------------------------------------------------
@@ -114,6 +149,11 @@ const NAMED_ENTITIES: Record<string, string> = {
   rdquo: "”",
   ldquo: "“",
   hellip: "…",
+  rarr: "→",
+  larr: "←",
+  times: "×",
+  middot: "·",
+  bull: "•",
   trade: "™",
   reg: "®",
   copy: "©",
@@ -200,6 +240,47 @@ export function parseBullets(shortDescription: string): string[] {
 }
 
 /**
+ * Split one paragraph's HTML into text runs, keeping <strong>/<b> as bold.
+ * Whitespace collapses inside runs but survives between them, so
+ * "<strong>BPC-157</strong> is …" keeps its space.
+ */
+function inlineRuns(html: string): RichParagraph {
+  const runs: TextRun[] = [];
+  const push = (raw: string, strong: boolean) => {
+    const text = decodeEntities(raw.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ");
+    if (text) runs.push({ text, strong });
+  };
+  const re = /<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    push(html.slice(last, m.index), false);
+    push(m[2] ?? "", true);
+    last = m.index + m[0].length;
+  }
+  push(html.slice(last), false);
+
+  if (runs.length > 0) {
+    runs[0] = { ...runs[0], text: runs[0].text.trimStart() };
+    const end = runs.length - 1;
+    runs[end] = { ...runs[end], text: runs[end].text.trimEnd() };
+  }
+  return runs.filter((r) => r.text !== "");
+}
+
+/**
+ * Parse short_description into paragraphs of runs — the product page's
+ * "Description" block. Same paragraph rules as parseBullets.
+ */
+export function parseSummary(shortDescription: string): RichParagraph[] {
+  if (!shortDescription) return [];
+  let blocks = paragraphInners(shortDescription);
+  if (blocks.length === 0) blocks = listItemInners(shortDescription);
+  if (blocks.length === 0) blocks = [shortDescription];
+  return blocks.map(inlineRuns).filter((runs) => runs.length > 0);
+}
+
+/**
  * Parse the description's `.rcl-extra-wrap` block into usage[] + faq[].
  * Missing sections yield empty arrays (no throw).
  */
@@ -247,7 +328,9 @@ export function parseUsageAndFaq(description: string): {
 /** Normalize one Store API image; alt falls back to the display name. */
 function mapImage(img: StoreApiImage, displayName: string): ProductImage {
   const alt = (img.alt ?? "").trim();
-  return { src: img.src, alt: alt || displayName };
+  const image: ProductImage = { src: img.src, alt: alt || displayName };
+  if (img.thumbnail) image.thumbnail = img.thumbnail;
+  return image;
 }
 
 /** Parse a minor-unit price string ("4400") to an integer. NaN -> 0. */
@@ -282,8 +365,8 @@ export interface CategoryInput {
 }
 
 export interface MapProductOptions {
-  /** variationId -> priceMinor, from parallel getVariation() calls. */
-  variationPrices?: Record<number, number>;
+  /** variationId -> live prices, from the single getVariations() list call. */
+  variationPrices?: Record<number, VariationPrice>;
   /** Optional COA/purity enrichment (content/coa-map.json). */
   coaMap?: CoaMap;
   /** Category assignment from content/taxonomy.ts (categoryForSlug). */
@@ -307,6 +390,10 @@ export function mapProduct(
   const kind: "simple" | "variable" =
     raw.type === "variable" ? "variable" : "simple";
   const priceMinor = toMinor(raw.prices?.price);
+  // Never let a missing/zero regular price read as a 100% discount — fall back
+  // to the live price so `onSale` stays false and no strike-through is drawn.
+  const rawRegular = toMinor(raw.prices?.regular_price);
+  const regularPriceMinor = rawRegular > priceMinor ? rawRegular : priceMinor;
   const currencyMinorUnit = raw.prices?.currency_minor_unit ?? 2;
 
   let variations: ProductVariation[] | undefined;
@@ -314,10 +401,14 @@ export function mapProduct(
     variations = raw.variations.map((v) => {
       const size = v.attributes?.find((a) => /size/i.test(a.name))?.value ?? "";
       const vp = variationPrices?.[v.id];
+      const vPrice = typeof vp?.priceMinor === "number" ? vp.priceMinor : priceMinor;
+      const vRegular =
+        typeof vp?.regularPriceMinor === "number" ? vp.regularPriceMinor : vPrice;
       return {
         variationId: v.id,
         size,
-        priceMinor: typeof vp === "number" ? vp : priceMinor,
+        priceMinor: vPrice,
+        regularPriceMinor: vRegular > vPrice ? vRegular : vPrice,
       };
     });
   }
@@ -325,10 +416,10 @@ export function mapProduct(
   const bullets = parseBullets(raw.short_description ?? "");
   const { usage, faq } = parseUsageAndFaq(raw.description ?? "");
   const images = (raw.images ?? [])
-    .filter((img) => !EXPANDED_GLP_RE.test(`${img.src} ${img.alt ?? ""}`))
+    .filter(
+      (img) => !EXPANDED_GLP_RE.test(`${img.src} ${img.thumbnail ?? ""} ${img.alt ?? ""}`)
+    )
     .map((img) => mapImage(img, displayName));
-  const localVial = LOCAL_VIALS[raw.slug];
-  if (localVial) images.unshift({ src: localVial, alt: displayName });
   const coa = lookupCoa(coaMap, raw);
 
   const product: Product = {
@@ -341,8 +432,13 @@ export function mapProduct(
     secondaryCategories: category?.secondarySlugs ?? [],
     kind,
     priceMinor,
+    regularPriceMinor,
+    // Trust WooCommerce's own flag, but require a real price gap so a stale
+    // `on_sale` can never render a strike-through against an equal price.
+    onSale: Boolean(raw.on_sale) && regularPriceMinor > priceMinor,
     currencyMinorUnit,
     bullets,
+    summary: parseSummary(raw.short_description ?? ""),
     usage,
     faq,
     images,
@@ -351,6 +447,11 @@ export function mapProduct(
   };
 
   if (variations && variations.length > 0) product.variations = variations;
+  // A simple product's single "Size" term, e.g. "70mg".
+  const sizeTerms = raw.attributes?.find((a) => /size/i.test(a.name))?.terms ?? [];
+  if (kind === "simple" && sizeTerms.length === 1) {
+    product.size = decodeEntities(sizeTerms[0].name).trim();
+  }
   if (coa.purity) product.purity = coa.purity;
   if (coa.coaUrl) product.coaUrl = coa.coaUrl;
 

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * OrderSummary — sticky right-column record card on /checkout.
+ * OrderSummary — sticky right-column record card on /checkout ("Order
+ * summary" / "Edit cart", as on the live checkout).
  *
  * A soft plate card: semibold Satoshi compound names, Satoshi tabular
  * money, the earned verified mark on COA-backed lines (trust graft #2).
@@ -10,26 +11,33 @@
  * exact parity with /cart and the CartDrawer.
  */
 
+import Link from "next/link";
 import { useCart } from "@/lib/cart";
-import { compliance } from "@/content/compliance";
+import { checkoutPage } from "@/content/site-copy";
 import { VerifiedMark } from "@/components/plate/VerifiedMark";
 import { formatMinor } from "@/components/checkout/money";
 import { TotalsLedger } from "@/components/checkout/TotalsLedger";
-import { unitCountOf } from "@/components/checkout/demo-order";
+import { LineMeta } from "@/components/checkout/LineMeta";
 import { hasVerifiedCoa } from "@/components/checkout/coa-lookup";
 
 export function OrderSummary() {
-  const { items, count, totals } = useCart();
+  const { items, totals } = useCart();
   const mu = totals.currencyMinorUnit;
 
   return (
-    <aside aria-label="Order summary" className="plate lg:sticky lg:top-24">
+    <aside
+      aria-label={checkoutPage.summaryHeading}
+      className="plate lg:sticky lg:top-24"
+    >
       <div className="plate-field">
         <div className="hairline-b flex items-baseline justify-between px-5 py-4">
-          <h2 className="micro-label">Order summary</h2>
-          <span className="data-num text-[11px] text-ink-muted">
-            {count} {count === 1 ? "item" : "items"}
-          </span>
+          <h2 className="micro-label">{checkoutPage.summaryHeading}</h2>
+          <Link
+            href="/cart"
+            className="text-[12px] text-green underline-offset-3 transition-colors hover:text-green-deep hover:underline"
+          >
+            {checkoutPage.editCart}
+          </Link>
         </div>
 
         <ul className="divide-y divide-hairline px-5">
@@ -47,6 +55,7 @@ export function OrderSummary() {
                   )}
                 </p>
                 <p className="micro-label mt-1">{item.dose}</p>
+                <LineMeta item={item} />
                 <p className="data-num mt-1 text-[11px] text-ink-muted">
                   {item.qty} × {formatMinor(item.price, mu)}
                 </p>
@@ -59,13 +68,7 @@ export function OrderSummary() {
         </ul>
 
         <div className="hairline-t px-5 py-4">
-          <TotalsLedger totals={totals} unitCount={unitCountOf(items)} />
-        </div>
-
-        <div className="hairline-t px-5 py-4">
-          <p className="warn-line inline-block rounded-md px-2.5 py-1.5 text-[11px] font-medium text-ink">
-            {compliance.ruoBanner}
-          </p>
+          <TotalsLedger totals={totals} />
         </div>
       </div>
     </aside>

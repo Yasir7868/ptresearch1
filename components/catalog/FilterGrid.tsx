@@ -10,8 +10,9 @@
  *   category pages omit it and pass a pre-filtered list.
  * - Category chips match primary OR secondary category (same rule as the
  *   /catalog/[category] routes). Search matches name/SKU, case-insensitive.
- * - Grid: 1-up mobile / 2-up tablet / 3-up desktop with generous gaps so the
- *   soft cards breathe (their shadows need the negative space).
+ * - Grid: 1-up mobile / 2-up tablet / 3-up desktop with gaps that let the
+ *   soft cards breathe (their shadows need the negative space). Rows stretch,
+ *   so every card in a row is the same height and the buy controls align.
  * - Entrance: cards fade + rise with a short row stagger as they enter the
  *   viewport (REFERENCE_EASE, ~70ms). Keys are stable (productId), so cards
  *   that survive a filter/sort change never re-animate — only newly added
@@ -22,11 +23,13 @@
  * on paper; active chip is navy-filled with mint count. Amber never appears
  * as text here.
  *
- * Sticky offset: the Header is `sticky top-0` at h-16, so this bar pins at
- * top-16 with a lower z-index (header z-40, bar z-30).
+ * Sticky offset: the Header is `sticky top-0` at 68px (+1px rule), so this
+ * bar pins at top-[68px] with a lower z-index (header z-40, bar z-30).
+ *
+ * `?q=` (the header search) seeds the search box via UrlQuerySync.
  */
 
-import { useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { SearchIcon } from "lucide-react";
 import { CATEGORIES } from "@/content/taxonomy";
@@ -40,16 +43,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { catalogPage } from "@/content/site-copy";
 import { ProductCard } from "./ProductCard";
+import { UrlQuerySync } from "./UrlQuerySync";
 import { purityValue } from "./format";
 
 type SortKey = "name-asc" | "price-asc" | "price-desc" | "purity-desc";
 
+// Price sorts use the live WooCommerce labels; name and purity sorts have no
+// live counterpart and follow the same "Sort by …" pattern.
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
-  { value: "name-asc", label: "Name A–Z" },
-  { value: "price-asc", label: "Price low–high" },
-  { value: "price-desc", label: "Price high–low" },
-  { value: "purity-desc", label: "Purity high–low" },
+  { value: "name-asc", label: "Sort by name" },
+  { value: "price-asc", label: catalogPage.sortByPriceAsc },
+  { value: "price-desc", label: catalogPage.sortByPriceDesc },
+  { value: "purity-desc", label: "Sort by purity" },
 ];
 
 /** Does the product belong to the given category (primary or secondary)? */
@@ -119,6 +126,12 @@ export function FilterGrid({
     return sorted;
   }, [products, showCategoryFilter, category, query, sort]);
 
+  // A search from the header (/catalog?q=…) runs across every category.
+  const applyUrlQuery = useCallback((q: string) => {
+    setQuery(q);
+    setCategory("all");
+  }, []);
+
   const hasActiveFilter = query.trim() !== "" || category !== "all";
 
   function resetFilters() {
@@ -128,8 +141,12 @@ export function FilterGrid({
 
   return (
     <section>
+      <Suspense fallback={null}>
+        <UrlQuerySync onQuery={applyUrlQuery} />
+      </Suspense>
+
       {/* ── Sticky filter bar ──────────────────────────────────────────── */}
-      <div className="hairline-y sticky top-16 z-30 bg-bg">
+      <div className="hairline-y sticky top-[68px] z-30 bg-bg">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 md:px-6 lg:flex-row lg:items-center lg:gap-6">
           {showCategoryFilter && (
             <div
@@ -176,8 +193,8 @@ export function FilterGrid({
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search name or SKU"
-                aria-label="Search compounds by name or SKU"
+                placeholder={catalogPage.searchPlaceholder}
+                aria-label={catalogPage.searchPlaceholder}
                 className="h-9 w-full rounded-lg border border-hairline bg-surface pr-3 pl-9 text-[13px] text-ink transition-colors placeholder:text-ink-muted/70 focus:border-green focus:outline-none"
               />
             </div>
@@ -188,9 +205,6 @@ export function FilterGrid({
                 aria-label="Sort products"
                 className="h-9 shrink-0 border-hairline bg-surface text-[12px] font-medium text-ink"
               >
-                <span className="text-[10px] font-medium tracking-[0.14em] text-ink-muted uppercase">
-                  Sort
-                </span>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent position="popper" align="end" sideOffset={4}>
@@ -206,13 +220,12 @@ export function FilterGrid({
               </SelectContent>
             </Select>
 
-            {/* Live result count — reference-record precision */}
+            {/* Live result count, in the live store's own words. */}
             <span
               aria-live="polite"
-              className="data-num hidden text-[11px] whitespace-nowrap text-ink-muted md:inline"
+              className="hidden text-[11px] whitespace-nowrap text-ink-muted lg:inline"
             >
-              <span className="text-green">{filtered.length}</span>/
-              {products.length}
+              {catalogPage.resultCount(filtered.length)}
             </span>
           </div>
         </div>
@@ -221,13 +234,15 @@ export function FilterGrid({
       {/* ── Specimen-plate grid ────────────────────────────────────────── */}
       <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16">
         {filtered.length > 0 ? (
-          <ul className="grid grid-cols-1 gap-x-10 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 md:gap-x-8 md:gap-y-12 lg:grid-cols-3">
             {filtered.map((p, i) => (
               <motion.li
                 key={p.productId}
                 /* min-w-0: grid items default to min-width:auto — long
-                   SKUs/labels would widen the track past the viewport */
-                className="min-w-0"
+                   SKUs/labels would widen the track past the viewport.
+                   h-full: let each plate fill the row so the buy controls
+                   align even where a compound name wraps to two lines. */
+                className="h-full min-w-0"
                 initial={{ opacity: 0, y: reduced ? 0 : 14 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "0px 0px -8% 0px" }}
@@ -243,11 +258,8 @@ export function FilterGrid({
           </ul>
         ) : (
           <div className="soft-card mx-auto max-w-2xl px-6 py-16 text-center">
-            <p className="micro-label">No results</p>
-            <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-ink-muted">
-              {query.trim()
-                ? `No compounds match “${query.trim()}”.`
-                : "No compounds match the current filters."}
+            <p className="mx-auto max-w-md text-[15px] leading-relaxed text-ink-muted">
+              {catalogPage.noResults}
             </p>
             {hasActiveFilter && (
               <button

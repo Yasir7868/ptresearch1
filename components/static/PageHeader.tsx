@@ -1,7 +1,7 @@
 /**
  * PageHeader — the shared opening pattern for every supporting page, restyled
- * for D3 "Reference Grade": a Satoshi micro-label kicker, a bold Satoshi
- * display title, and an optional Satoshi lead.
+ * for D3 "Reference Grade": an optional Satoshi micro-label kicker, a bold
+ * Satoshi display title, and an optional Satoshi lead.
  *
  * Server component. Entrance motion comes from the FadeIn client leaves
  * (fade + rise, staggered) — calm and editorial per DESIGN §6.
@@ -15,18 +15,20 @@ export function PageHeader({
   sub,
   className,
 }: {
-  label: string;
+  label?: string;
   title: string;
   sub?: string;
   className?: string;
 }) {
   return (
     <FadeInStagger className={cn("max-w-3xl", className)}>
+      {label ? (
+        <FadeIn>
+          <p className="micro-label mb-5">{label}</p>
+        </FadeIn>
+      ) : null}
       <FadeIn>
-        <p className="micro-label">{label}</p>
-      </FadeIn>
-      <FadeIn>
-        <h1 className="display-hero mt-5 text-[clamp(2.5rem,5.5vw,4rem)] text-ink">
+        <h1 className="display-hero text-[clamp(2.5rem,5.5vw,4rem)] text-ink">
           {title}
         </h1>
       </FadeIn>

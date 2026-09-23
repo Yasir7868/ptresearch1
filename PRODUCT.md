@@ -17,26 +17,39 @@ product imagery + canonical copy come from the live WooCommerce store.
 
 ## Verbatim client copy (do not rewrite)
 
+All site copy is the LIVE ptresearch.shop copy, re-harvested 2026-09-17 from
+every page in the live sitemaps plus the cart and checkout. It lives in
+`content/site-copy.ts` (organized by live page and section, with the live
+site's own typos and contradictions listed at the top), promo labels and the
+tagline in `content/brand-config.ts`, and RUO lines in `content/compliance.ts`.
+Components read from those files; do not type copy into components. Pages
+that exist only on this site (About, Shipping, Contact) use live copy only.
+
 - Hero headline: **"Premium-Grade Peptides"**
-- Hero subhead: **"At Primetime Research, we're committed to providing
+- Hero subhead: **"At Primetime Research, we’re committed to providing
   researchers with the highest quality peptides and peptide blends in the
   industry."**
-- Tagline: **"Where Innovation Meets Research Excellence"**
+- Tagline: **"Empowering Ideas Through Research"** (replaced "Where Innovation
+  Meets Research Excellence" on the live homepage)
 
 Promos (live offers, display verbatim; constants in `content/brand-config.ts`):
 
-- "Buy One Get One 50% Off — auto-applied at checkout"
-- "Code PT25 — 25% off"
-- "Free shipping over $200"
-- "2-Day Shipping"
+- "LIMITED OFFER" / "USE CODE: PT25" / "25% off all Research Compounds" /
+  "Shop Now" — top banner on every page except the homepage
+- "2-Day Shipping | Free Shipping $200+" — homepage strip
+- The "Buy One Get One 50% Off" banner is hidden on the live site and the live
+  cart no longer applies it, so it is gone from copy and cart math.
 
 ## Compliance framing (prominent, not fine print)
 
 RUO framing is a first-class trust element. Strings live in
-`content/compliance.ts`:
+`content/compliance.ts`, verbatim from the live site:
 
-- Banner: **"FOR RESEARCH USE ONLY. Not for human or veterinary use."**
-- FDA disclaimer + footer note included there — pull verbatim.
+- Homepage strip: **"FOR RESEARCH USE ONLY"**
+- Footer: **"All products are sold for research, laboratory, or analytical
+  purposes only, and are not for human consumption"**
+- Age-gate disclaimer and the product-description RUO line.
+- The live site has no FDA disclaimer; none is shown.
 
 ## HARD RULES (violations = rework)
 
@@ -61,13 +74,20 @@ RUO framing is a first-class trust element. Strings live in
 ## Architecture seams
 
 - **Cart:** `lib/cart.tsx` — `CartAdapter` interface; the shipped
-  `LocalStorageCartAdapter` computes totals locally (BOGO 50%, PT25, free
-  shipping ≥ $200). The future WooCommerce adapter (WC Store API) returns
+  `LocalStorageCartAdapter` computes totals locally (PT25, free shipping
+  ≥ $200). The future WooCommerce adapter (WC Store API) returns
   server-canonical totals with zero component changes. `CartItem`/
   `AddItemInput` already carry `productId`/`variationId`/`variation` for the
   swap. All money = integer minor units (cents).
 - **Analytics:** `lib/analytics.ts` — console stub; PostHog swaps in via
   `setAnalyticsAdapter`.
+- **Admin panel:** `/admin` (see README "Admin panel"). Reads and writes
+  WooCommerce through the REST API (`lib/admin/woo/`), staff accounts in SQLite
+  (`lib/admin/db.ts`), roles in `lib/admin/permissions.ts`. GLP rule: every
+  product name or note text from WooCommerce reaches admin UI only through
+  `getCatalogIndex()` (`code()` / `productName()`), which uses the mapper's
+  `createGlpTextCoder`. Storefront chrome lives in `app/(store)` so it never
+  wraps admin pages.
 - **SEO / structured data:** `lib/seo.ts` + `lib/jsonld.ts` (Product,
   Breadcrumb, Organization). JSON-LD uses mapper DISPLAY names only.
 - **Theme:** `content/brand-config.ts` palette → `scripts/gen-theme.mjs` →

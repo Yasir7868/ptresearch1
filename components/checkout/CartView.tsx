@@ -8,7 +8,8 @@
  * rows matching the CartDrawer. Totals, coupon entry, and the free-shipping
  * progress live in a sticky soft record card. The earned verified mark
  * renders on lines whose product has a real COA (trust graft #2). All money
- * renders through the shared minor-unit formatter.
+ * renders through the shared minor-unit formatter. Labels follow the live
+ * /cart/ page (content/site-copy.ts → cartPage).
  */
 
 import { useState, type FormEvent } from "react";
@@ -19,15 +20,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCart, type CartItem } from "@/lib/cart";
-import { compliance } from "@/content/compliance";
-import { brandConfig } from "@/content/brand-config";
+import { cartPage } from "@/content/site-copy";
 import { track } from "@/lib/analytics";
 import { FadeIn } from "@/components/motion/FadeIn";
 import { VerifiedMark } from "@/components/plate/VerifiedMark";
 import { formatMinor } from "@/components/checkout/money";
 import { TotalsLedger } from "@/components/checkout/TotalsLedger";
+import { LineMeta } from "@/components/checkout/LineMeta";
 import { FreeShippingProgress } from "@/components/checkout/FreeShippingProgress";
-import { unitCountOf } from "@/components/checkout/demo-order";
 import { useCartReady } from "@/components/checkout/useCartReady";
 import { hasVerifiedCoa } from "@/components/checkout/coa-lookup";
 
@@ -47,7 +47,7 @@ function Thumb({ item, size }: { item: CartItem; size: number }) {
           alt={item.name}
           fill
           sizes={`${size}px`}
-          className="duotone object-cover"
+          className="object-cover"
         />
       ) : (
         <div className="flex h-full items-center justify-center">
@@ -72,6 +72,17 @@ function LineName({ item }: { item: CartItem }) {
 
 function QtyStepper({ item }: { item: CartItem }) {
   const { updateQty } = useCart();
+
+  // A sold-individually line (a gift card) is always exactly one — WooCommerce
+  // prints the figure with no stepper, and so do we.
+  if (item.soldIndividually) {
+    return (
+      <span className="data-num inline-flex h-8 items-center rounded-lg border border-hairline bg-surface px-3 text-sm text-ink-muted">
+        {item.qty}
+      </span>
+    );
+  }
+
   return (
     <div className="inline-flex items-center rounded-lg border border-hairline bg-surface">
       <button
@@ -130,7 +141,7 @@ function CouponForm() {
       })
       .catch((err: unknown) => {
         setError(
-          err instanceof Error ? err.message : "That code could not be applied."
+          err instanceof Error ? err.message : cartPage.couponNotFound(trimmed)
         );
       })
       .finally(() => setApplying(false));
@@ -140,7 +151,7 @@ function CouponForm() {
     <div>
       <form onSubmit={onSubmit} className="flex gap-2">
         <label htmlFor="coupon-code" className="sr-only">
-          Coupon code
+          {cartPage.couponPlaceholder}
         </label>
         <Input
           id="coupon-code"
@@ -149,7 +160,7 @@ function CouponForm() {
             setCode(e.target.value);
             if (error) setError(null);
           }}
-          placeholder="Coupon code"
+          placeholder={cartPage.couponPlaceholder}
           autoComplete="off"
           className="data-num h-9 uppercase placeholder:normal-case"
           aria-invalid={error ? true : undefined}
@@ -157,10 +168,10 @@ function CouponForm() {
         <Button
           type="submit"
           variant="outline"
-          className="h-9 px-4"
+          className="h-9 shrink-0 px-4"
           disabled={applying || code.trim().length === 0}
         >
-          Apply
+          {cartPage.applyCoupon}
         </Button>
       </form>
 
@@ -216,13 +227,10 @@ export function CartView() {
   if (items.length === 0) {
     return (
       <FadeIn className="flex min-h-[40vh] flex-col items-center justify-center gap-4 py-24 text-center">
-        <p className="micro-label">Your cart is empty</p>
-        <p className="max-w-[32ch] text-sm text-ink-muted">
-          Research compounds you add will appear here.
-        </p>
+        <p className="text-[15px] text-ink-muted">{cartPage.empty}</p>
         {/* Primary (green) — the page's one CTA */}
         <Button asChild className="mt-2 h-10 px-6">
-          <Link href="/catalog">Browse the catalog</Link>
+          <Link href="/catalog">{cartPage.returnToShop}</Link>
         </Button>
       </FadeIn>
     );
@@ -232,13 +240,8 @@ export function CartView() {
     <FadeIn>
       {/* Page header */}
       <div className="hairline-b mb-10 flex flex-wrap items-end justify-between gap-4 pb-6">
-        <div>
-          <p className="micro-label">Order record</p>
-          <h1 className="mt-2 text-[clamp(1.9rem,3.4vw,3rem)]">Cart</h1>
-        </div>
-        <p className="data-num text-[13px] text-ink-muted">
-          {count} {count === 1 ? "item" : "items"}
-        </p>
+        <h1 className="text-[clamp(1.9rem,3.4vw,3rem)]">{cartPage.title}</h1>
+        <p className="data-num text-[13px] text-ink-muted">{count}</p>
       </div>
 
       <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
@@ -250,10 +253,10 @@ export function CartView() {
             <table className="ledger-table">
               <thead>
               <tr>
-                <th>Item</th>
-                <th className="num">Unit</th>
-                <th>Qty</th>
-                <th className="num">Total</th>
+                <th>{cartPage.columns.product}</th>
+                <th className="num">{cartPage.columns.price}</th>
+                <th>{cartPage.columns.quantity}</th>
+                <th className="num">{cartPage.columns.subtotal}</th>
                 <th className="w-10">
                   <span className="sr-only">Remove</span>
                 </th>
@@ -268,6 +271,7 @@ export function CartView() {
                       <div className="min-w-0">
                         <LineName item={item} />
                         <p className="micro-label mt-1">{item.dose}</p>
+                        <LineMeta item={item} />
                       </div>
                     </div>
                   </td>
@@ -300,8 +304,9 @@ export function CartView() {
                     <RemoveButton item={item} />
                   </div>
                   <p className="micro-label">{item.dose}</p>
+                  <LineMeta item={item} />
                   <p className="data-num text-[11px] text-ink-muted">
-                    {formatMinor(item.price, mu)} each
+                    {cartPage.columns.price}: {formatMinor(item.price, mu)}
                   </p>
                   <div className="flex items-center justify-between">
                     <QtyStepper item={item} />
@@ -320,22 +325,18 @@ export function CartView() {
               className="inline-flex items-center gap-1.5 text-sm font-medium text-green transition-colors hover:text-green-deep"
             >
               <ArrowLeftIcon className="size-3.5" />
-              Continue browsing
+              {cartPage.continueShopping}
             </Link>
           </div>
         </section>
 
         {/* Summary — a soft record card */}
-        <aside aria-label="Order summary" className="plate lg:sticky lg:top-24">
+        <aside aria-label={cartPage.total} className="plate lg:sticky lg:top-24">
           <div className="plate-field">
-            <div className="hairline-b px-5 py-4">
-              <h2 className="micro-label">Order summary</h2>
-            </div>
-
             <div className="flex flex-col gap-6 px-5 py-5">
               <CouponForm />
               <FreeShippingProgress totals={totals} />
-              <TotalsLedger totals={totals} unitCount={unitCountOf(items)} />
+              <TotalsLedger totals={totals} />
 
               <Button asChild className="h-11 w-full text-sm">
                 <Link
@@ -348,24 +349,12 @@ export function CartView() {
                     })
                   }
                 >
-                  Proceed to checkout
+                  {cartPage.proceedToCheckout}
                 </Link>
               </Button>
-
-              <p className="micro-label text-center">
-                {brandConfig.promos.bogo.label} —{" "}
-                {brandConfig.promos.bogo.detail}
-              </p>
             </div>
           </div>
         </aside>
-      </div>
-
-      {/* RUO reminder — faint amber wash, ink text (warn-line) */}
-      <div className="mt-16 text-center">
-        <p className="warn-line inline-block rounded-md px-3 py-1.5 text-[12px] font-medium text-ink">
-          {compliance.ruoBanner}
-        </p>
       </div>
     </FadeIn>
   );

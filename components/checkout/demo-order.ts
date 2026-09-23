@@ -8,51 +8,31 @@
  */
 
 import type { CartItem, CartTotals } from "@/lib/cart";
+import { checkoutPage } from "@/content/site-copy";
 
 // ---------------------------------------------------------------------------
-// Payment methods (demo — no card option by design)
+// Payment methods — the live checkout offers one card gateway ("Pay securely")
 // ---------------------------------------------------------------------------
 
-export type PaymentMethodId = "zelle" | "venmo" | "crypto";
+export type PaymentMethodId = "card";
 
-export const PAYMENT_METHOD_IDS = ["zelle", "venmo", "crypto"] as const;
+export const PAYMENT_METHOD_IDS = ["card"] as const;
 
 export interface PaymentMethodInfo {
   id: PaymentMethodId;
   label: string;
-  /** One-line note shown on the checkout radio card. */
+  /** Description shown on the checkout radio card. */
   note: string;
-  /**
-   * Honest placeholder for the confirmation panel — real handles/addresses
-   * appear once the store backend is connected. Never invent them.
-   */
+  /** What happens after the order is placed. */
   instructions: string;
 }
 
-const CONFIRMATION_NOTE =
-  "You'll receive payment instructions on the confirmation page.";
-
 export const PAYMENT_METHODS: PaymentMethodInfo[] = [
   {
-    id: "zelle",
-    label: "Zelle",
-    note: CONFIRMATION_NOTE,
-    instructions:
-      "The Zelle handle and reference instructions appear here once the store backend is connected.",
-  },
-  {
-    id: "venmo",
-    label: "Venmo",
-    note: CONFIRMATION_NOTE,
-    instructions:
-      "The Venmo handle and reference instructions appear here once the store backend is connected.",
-  },
-  {
-    id: "crypto",
-    label: "Crypto",
-    note: CONFIRMATION_NOTE,
-    instructions:
-      "Wallet addresses and reference instructions appear here once the store backend is connected.",
+    id: "card",
+    label: checkoutPage.paymentMethod.label,
+    note: checkoutPage.paymentMethod.description,
+    instructions: checkoutPage.paymentMethod.afterOrder,
   },
 ];
 
@@ -88,6 +68,15 @@ export interface DemoOrder {
   items: CartItem[];
   /** Adapter-canonical totals captured at submit time. */
   totals: CartTotals;
+  /**
+   * The gateway's Checkout Session id, when the order was paid through the
+   * embedded card surface. The confirmation page reconciles against it
+   * (/api/payment/reconcile). Absent on an order placed while no payment
+   * gateway is configured.
+   */
+  gatewaySessionId?: string;
+  /** The stable checkout id the payment was created under. */
+  checkoutId?: string;
 }
 
 export const DEMO_ORDER_KEY = "ptresearch__demo_order_v1";
@@ -126,9 +115,4 @@ export function readDemoOrder(): DemoOrder | null {
   } catch {
     return null;
   }
-}
-
-/** Total units across lines — drives the BOGO auto-note (needs ≥ 2 units). */
-export function unitCountOf(items: readonly Pick<CartItem, "qty">[]): number {
-  return items.reduce((sum, i) => sum + i.qty, 0);
 }

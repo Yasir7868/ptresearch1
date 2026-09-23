@@ -23,22 +23,38 @@
   /* Palette — generated from content/brand-config.ts (scripts/gen-theme.mjs).
      Edit the brandConfig.palette object, not this block. */
   /* @generated-palette:start — DO NOT EDIT (source: content/brand-config.ts → scripts/gen-theme.mjs) */
-  --color-paper:      #F7F8FA;
-  --color-bg:         #F7F8FA;
-  --color-surface:    #FFFFFF;
-  --color-ink:        #10151D;
-  --color-ink-muted:  #4E5765;
-  --color-hairline:   #DCE1E9;
-  --color-band:       #1F3353;
-  --color-green:      #2C4D82;
-  --color-green-deep: #182438;
-  --color-mint:       #C7D4E8;
-  --color-amber:      #F06D22;
-  --color-accent:     #2C4D82;
-  --color-accent-ink: #182438;
-  --color-ok:         #1E7A4A;
-  --color-warn-wash:  #FDEEE2;
-  --color-error:      #B3341C;
+  --color-paper:         #F7F8FA;
+  --color-bg:            #F7F8FA;
+  --color-surface:       #FFFFFF;
+  --color-ink:           #10151D;
+  --color-ink-muted:     #4E5765;
+  --color-hairline:      #DCE1E9;
+  --color-band:          #1F3353;
+  --color-green:         #2C4D82;
+  --color-green-deep:    #182438;
+  --color-mint:          #C7D4E8;
+  --color-amber:         #F06D22;
+  --color-accent:        #2C4D82;
+  --color-accent-ink:    #182438;
+  --color-ok:            #1E7A4A;
+  --color-warn-wash:     #FDEEE2;
+  --color-error:         #B3341C;
+  --color-mist:          #F4F7FB;
+  --color-navy-ink:      #0B1B33;
+  --color-midnight:      #061428;
+  --color-navy:          #1E3A6E;
+  --color-cobalt:        #1E5AA8;
+  --color-cobalt-bright: #2B6FCC;
+  --color-azure:         #7FB3FF;
+  --color-rule:          #E1E8F2;
+  --color-steel:         #5A6B85;
+  --color-steel-ink:     #41506A;
+  --color-frost:         #F7FAFD;
+  --color-ice:           #EAF3FB;
+  --color-ice-rule:      #D6E3F1;
+  --color-haze:          #9FB3D1;
+  --color-haze-light:    #C9D6EA;
+  --color-haze-pale:     #BFD4F5;
   /* @generated-palette:end */
 
   /* Semantic aliases that Tailwind utilities can reference */
@@ -58,6 +74,23 @@
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-heading: var(--font-satoshi), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* 2026-09 CRO redesign faces — the homepage + site chrome only (DESIGN.md
+     §0). Manrope (UI + body) and Source Serif 4 (section headings), both SIL
+     OFL, self-hosted from app/fonts/. The -face vars are set by next/font/local:
+     Manrope in app/layout.tsx, Source Serif on the homepage <main>.
+     Utilities: font-manrope, font-serif. */
+  --font-manrope: var(--font-manrope-face), "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+  --font-serif: var(--font-source-serif-face), Georgia, "Times New Roman", serif;
+
+  /* The live ptresearch.shop product template's faces — the product page only
+     (DESIGN.md §0). Roboto (titles, prices, bands, cards) and Poppins 600
+     ("Related Products"), both SIL OFL, self-hosted from app/fonts/; the -face
+     vars are set on the product page <main>. Utilities: font-roboto,
+     font-poppins. Body text there is the live system stack. */
+  --font-roboto: var(--font-roboto-face), Roboto, Arial, sans-serif;
+  --font-poppins: var(--font-poppins-face), Poppins, Arial, sans-serif;
 
   /* Radii — the SOFT surface scale (2026-07 softening pass; DESIGN §4).
      Cards / plates / images / panels = 16px (rounded-xl); buttons + inputs =
@@ -233,6 +266,86 @@ h4 {
   letter-spacing: -0.025em;
   line-height: 1.08;
   color: var(--ink);
+}
+
+/* ─── Hero vial cluster ──────────────────────────────────────────────────────
+   The three cut-out vials in the homepage hero drift slowly so they read as
+   floating rather than pasted on. Each gets its own duration and a negative
+   delay, so they start mid-cycle and never bob in unison. Transform only —
+   no layout work — and motion-safe: reduced motion pins them in place. */
+@keyframes pr-vial-float {
+  from {
+    transform: translate3d(0, -7px, 0);
+  }
+  to {
+    transform: translate3d(0, 9px, 0);
+  }
+}
+.vial-float {
+  animation: pr-vial-float 5.5s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.vial-float-2 {
+  animation-duration: 7.2s;
+  animation-delay: -2.4s;
+}
+.vial-float-3 {
+  animation-duration: 6.3s;
+  animation-delay: -4.1s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vial-float {
+    animation: none;
+  }
+}
+
+/* ─── Marquee (homepage "PEPTIDES FOR RESEARCH" band) ────────────────────────
+   The live site's scrolling line, as outlined display type. The track holds
+   the sequence TWICE and slides exactly half its width, so the second copy is
+   already in place when it loops — seamless, no JS, no measuring. Per DESIGN
+   §6 the line freezes under reduced motion (it stays readable, just still).
+
+   The outline is text-stroke with a transparent fill. `paint-order` keeps the
+   stroke from eating into the letterforms where strokes meet. */
+@keyframes pr-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+.marquee-track {
+  animation: pr-marquee 38s linear infinite;
+  will-change: transform;
+}
+.marquee-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--color-navy);
+  paint-order: stroke fill;
+}
+@media (min-width: 640px) {
+  .marquee-outline {
+    -webkit-text-stroke-width: 2px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* ─── Redesign scope (.landing) ──────────────────────────────────────────────
+   The heading rule above is unlayered, so it beats every Tailwind utility on
+   an h1–h4. The redesigned homepage styles its headings with utilities, so
+   inside `.landing` these properties are handed back to the cascade layers
+   (utilities first, then Tailwind's preflight, which inherits). */
+.landing :is(h1, h2, h3, h4) {
+  font-family: revert-layer;
+  font-weight: revert-layer;
+  letter-spacing: revert-layer;
+  line-height: revert-layer;
+  color: revert-layer;
 }
 
 /* ─── Paper grain utility ────────────────────────────────────────────────────
@@ -545,6 +658,31 @@ hr {
   border-right: 1px solid var(--crop-color, var(--amber));
 }
 
+/* ─── Plate image zoom (.plate-zoom) ─────────────────────────────────────────
+   Frames the SPECIMEN instead of the backdrop. The vial photographs are all
+   shot to one studio template with a lot of near-white air around the vial, so
+   a whole-frame `object-contain` rendered the vial at roughly a fifth of the
+   card width. This scales the contained image until a measured crop window
+   fills the plate, and lifts it because the vial sits low in its frame.
+
+   Both numbers arrive as custom properties from components/plate/vial-crop.ts
+   (--plate-zoom = 1 / crop height, --plate-zoom-y = 0.5 - crop centre), so the
+   crop is tuned in one documented place rather than in a magic transform here.
+   Order matters: translateY resolves against the image box BEFORE scale, which
+   is what keeps the offset independent of the zoom factor.
+
+   Hover develops the specimen a further 3% — the photographic counterpart of
+   the plate's 2px lift. Unzoomed plates (--plate-zoom unset) are untouched. */
+.plate-zoom {
+  transform: scale(var(--plate-zoom, 1)) translateY(var(--plate-zoom-y, 0%));
+  transform-origin: center;
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.plate-interactive:hover .plate-zoom {
+  transform: scale(calc(var(--plate-zoom, 1) * 1.03))
+    translateY(var(--plate-zoom-y, 0%));
+}
+
 /* ─── Duotone treatment ──────────────────────────────────────────────────────
    References the `#pt-duotone` SVG filter defined once in app/layout.tsx
    (SSR-safe). Maps every product photo to a navy→slate-blue→white 2-tone ramp
@@ -563,11 +701,16 @@ hr {
    deepen ONLY (no lift). No layout shift. */
 @media (prefers-reduced-motion: reduce) {
   .plate-field,
-  .duotone {
+  .duotone,
+  .plate-zoom {
     transition: none;
   }
   .plate-interactive:hover .plate-field {
     transform: none;
+  }
+  /* Keep the crop — it is framing, not motion — but drop the hover develop. */
+  .plate-interactive:hover .plate-zoom {
+    transform: scale(var(--plate-zoom, 1)) translateY(var(--plate-zoom-y, 0%));
   }
   .plate-interactive:hover .duotone {
     filter: url("#pt-duotone") saturate(0.92) contrast(0.98);
@@ -597,4 +740,41 @@ hr {
     outline: 2px solid var(--green);
     outline-offset: 2px;
   }
+}
+
+/* Gift card amount slider (/gift-card) ------------------------------------
+   A range input's track and thumb are only reachable through vendor
+   pseudo-elements, which utility classes cannot express — so the live page's
+   slider faces live here: a 6px hairline track and a 28px white thumb ringed
+   in brand navy. Everything else about the control is utilities on the
+   element itself (components/giftcard/GiftCardPanel.tsx). */
+.ptgc-range {
+  accent-color: var(--green);
+}
+.ptgc-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 10px;
+  background: var(--hairline);
+}
+.ptgc-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -11px;
+  border: 3px solid var(--green);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 7px rgb(0 0 0 / 0.2);
+}
+.ptgc-range::-moz-range-track {
+  height: 6px;
+  border-radius: 10px;
+  background: var(--hairline);
+}
+.ptgc-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--green);
+  border-radius: 50%;
+  background: var(--surface);
 }

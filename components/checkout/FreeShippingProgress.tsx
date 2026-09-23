@@ -15,8 +15,15 @@ export function FreeShippingProgress({ totals }: { totals: CartTotals }) {
   const threshold = brandConfig.promos.freeShipping.thresholdMinor;
   const mu = totals.currencyMinorUnit;
   const merchandise = totals.itemsSubtotal - totals.discount;
-  const remaining = Math.max(0, threshold - merchandise);
-  const progress = threshold > 0 ? Math.min(1, merchandise / threshold) : 1;
+  // A bulk tier can earn free shipping below the spend threshold, so the
+  // adapter's own verdict wins over the arithmetic (lib/cart.tsx).
+  const earned = totals.shipping === 0;
+  const remaining = earned ? 0 : Math.max(0, threshold - merchandise);
+  const progress = earned
+    ? 1
+    : threshold > 0
+      ? Math.min(1, merchandise / threshold)
+      : 1;
 
   return (
     <div>

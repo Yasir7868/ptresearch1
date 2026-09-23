@@ -1,36 +1,32 @@
 /**
- * TestingStory — the About/testing CHAPTER BAND (DESIGN §7.9): the verbatim
- * aboutCopy movement (tagline, standards line, the "No exceptions. No
- * shortcuts." assurance) beside the client's branded lab photograph as a
- * specimen plate on the navy band. The verbatim
- * third-party-testing Q&A from /faq/ sits with it, so the claim and its
- * evidence stay co-located (DESIGN §9.5). Enters with the InkWipe flood.
+ * TestingStory — the About CHAPTER BAND (DESIGN §7.9), carrying the live
+ * homepage about block verbatim: "Primetime Research" / "Your trusted source
+ * for high-purity peptides", the body, standards line and "No exceptions. No
+ * shortcuts." assurance, `View Catalog`, and the 99% / 50+ / 12+ stats —
+ * beside the client's branded lab photograph as a specimen plate on the navy
+ * band. Enters with the InkWipe flood.
  *
  * NOTE: aboutCopy.body contains "empower" — a banned word in house style but
- * VERBATIM client copy; kept by default, flagged for intake (DESIGN §7.9).
+ * VERBATIM client copy, kept as published.
  *
  * Server component; copy verbatim from content/site-copy.ts.
  */
 
 import Link from "next/link";
-import { aboutCopy, faqItems } from "@/content/site-copy";
+import { aboutCopy } from "@/content/site-copy";
 import { SpecimenPlate } from "@/components/plate/SpecimenPlate";
 import { InkWipe } from "@/components/motion/InkWipe";
-
-// Verbatim third-party-testing Q&A from the live /faq/ page.
-const thirdParty = faqItems.find(
-  (f) => f.q === "Are your peptides third-party tested?"
-);
 
 export function TestingStory() {
   return (
     <InkWipe>
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-x-16 gap-y-14 px-4 py-24 md:grid-cols-2 md:px-6 md:py-32">
-        {/* ── Copy column — verbatim about movement ── */}
+        {/* ── Copy column — verbatim about block ── */}
         <div>
-          <p className="micro-label-dark">{aboutCopy.tagline}</p>
+          <p className="micro-label-dark">{aboutCopy.brand}</p>
           <h2 className="mt-4 text-[clamp(1.9rem,3.4vw,3rem)]">
-            {aboutCopy.headingLead}{" "}
+            {aboutCopy.headingLead}
+            <br />
             <span className="amber-display">{aboutCopy.headingEmphasis}</span>
           </h2>
 
@@ -42,20 +38,23 @@ export function TestingStory() {
             {aboutCopy.assurance}
           </p>
 
-          {thirdParty && (
-            // Band-inner content container — 20px radius (soft scale); the
-            // full-bleed band itself stays square at the viewport edges.
-            <div className="mt-9 rounded-2xl border border-mint/25 p-5 md:p-6">
-              <p className="micro-label-dark">{thirdParty.q}</p>
-              <p className="mt-3 text-[14px] leading-relaxed">
-                {thirdParty.a}
-              </p>
-            </div>
-          )}
+          <Link
+            href="/catalog"
+            className="mt-9 inline-flex h-11 items-center justify-center rounded-lg bg-surface px-7 text-sm font-[540] tracking-[0.01em] text-green transition-colors hover:bg-mint"
+          >
+            {aboutCopy.cta}
+          </Link>
 
-          <p className="mt-8 max-w-xl text-[12.5px] leading-relaxed text-mint/70">
-            {aboutCopy.supplyLine}
-          </p>
+          <div className="mt-12 flex flex-wrap gap-x-12 gap-y-6 border-t border-mint/20 pt-8">
+            {aboutCopy.stats.map((stat) => (
+              <div key={stat.label}>
+                <p className="amber-display font-display text-[clamp(1.8rem,3vw,2.4rem)] leading-none font-bold tracking-[-0.02em] [font-variant-numeric:tabular-nums_lining-nums]">
+                  {stat.value}
+                </p>
+                <p className="micro-label-dark mt-2">{stat.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ── Specimen plate — the branded lab photograph (client hero scene).
@@ -78,14 +77,6 @@ export function TestingStory() {
             cropColor="amber"
             interactive={false}
           />
-          <p className="mt-6">
-            <Link
-              href="/coa"
-              className="text-sm font-[540] text-(--mint-bright) underline-offset-4 transition-colors hover:text-surface hover:underline"
-            >
-              View Lab Results →
-            </Link>
-          </p>
         </div>
       </div>
     </InkWipe>

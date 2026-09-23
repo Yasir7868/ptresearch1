@@ -18,13 +18,23 @@
  *   - `image` → a duotoned next/image (the catalog vials).
  *   - `field` → arbitrary node that REPLACES the image (e.g. the trophy purity
  *     numeral for the COA "wall of certificates", or a category glyph).
+ *   - `imageZoom` → frames the SPECIMEN rather than the backdrop, for the
+ *     uniformly-shot vial photographs (components/plate/vial-crop.ts).
+ *   - `badge` → a corner marker in the field opposite the verified mark.
  *
  * Everything below the field (`eyebrow`, `title`, `record`, `footer`) is
  * optional; omit them for a bare framed figure (hero).
+ *
+ * `actions` adds real controls (an add-to-cart button) to a plate that is also
+ * a link. A button nested inside an anchor is invalid HTML and untappable, so
+ * supplying `actions` with `href` switches the plate from "link wrapping
+ * everything" to a STRETCHED LINK: the anchor becomes an overlay covering the
+ * card, and the actions sit above it. The whole card stays one click target,
+ * the button stays its own control, and both keep their own focus ring.
  */
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { VerifiedMark } from "@/components/plate/VerifiedMark";
 
@@ -69,6 +79,12 @@ export interface SpecimenPlateProps {
   imageClassName?: string;
   /** Apply the #pt-duotone treatment to the image. Default true. */
   duotone?: boolean;
+  /**
+   * Zoom the image to a measured crop window instead of showing the whole
+   * frame — for the uniform studio vial shots. Pass VIAL_ZOOM
+   * (components/plate/vial-crop.ts); omit for any off-template photo.
+   */
+  imageZoom?: { scale: number; offsetY: number };
   /** Replaces the image entirely (trophy numeral, glyph, custom figure). */
   field?: ReactNode;
   /** CSS aspect-ratio for the field. Default "1 / 1" (square). */
@@ -87,6 +103,13 @@ export interface SpecimenPlateProps {
 
   /** Earned verified mark — pass true ONLY where a real COA exists. */
   verified?: boolean;
+  /** Corner marker in the field (e.g. a sale pill), opposite the verified mark. */
+  badge?: ReactNode;
+  /**
+   * Controls rendered under the record, OUTSIDE the card link. Supplying this
+   * with `href` switches the plate to a stretched-link layout (see above).
+   */
+  actions?: ReactNode;
 
   /** RETIRED (softening pass) — accepted for compatibility, no longer drawn. */
   cropColor?: CropColor;
@@ -94,7 +117,11 @@ export interface SpecimenPlateProps {
   interactive?: boolean;
   /** Wrap the whole plate in a link. */
   href?: string;
-  /** Accessible label when the plate is a link and the title is decorative. */
+  /**
+   * Accessible label when the plate is a link and the title is decorative.
+   * REQUIRED alongside `actions`: in that layout the anchor is an empty
+   * overlay, so this is the only thing naming it.
+   */
   ariaLabel?: string;
   className?: string;
 }
@@ -106,6 +133,7 @@ export function SpecimenPlate({
   imageFit = "contain",
   imageClassName,
   duotone = true,
+  imageZoom,
   field,
   fieldRatio = "1 / 1",
   fieldClassName,
@@ -114,6 +142,8 @@ export function SpecimenPlate({
   record,
   footer,
   verified = false,
+  badge,
+  actions,
   interactive = true,
   href,
   ariaLabel,
@@ -121,12 +151,10 @@ export function SpecimenPlate({
 }: SpecimenPlateProps) {
   const hasRecord = Boolean(eyebrow || title || record || footer);
 
-  // Local branded studio vials (/product-vials/) are exempt from the duotone
-  // treatment: the set is already internally consistent and label-branded in
-  // the site's navy, and #pt-duotone lifts the label ink toward slate and
-  // smudges the logo roundel (DESIGN §5, decided from screenshots 2026-07-21).
-  const applyDuotone =
-    duotone && !(image?.src.startsWith("/product-vials/") ?? false);
+  // Product shots come from WooCommerce and take the duotone treatment
+  // (DESIGN §5). Callers that supply a photograph whose roundel the treatment
+  // would smudge — the About lab scene — pass duotone={false}.
+  const applyDuotone = duotone;
 
   const inner = (
     <>
@@ -148,15 +176,30 @@ export function SpecimenPlate({
               height={image.height ?? 640}
               sizes={imageSizes}
               priority={imagePriority}
+              /* The zoom supplies its own breathing room via the crop window,
+                 so it replaces the contain pad rather than fighting it. */
+              style={
+                imageZoom
+                  ? ({
+                      "--plate-zoom": imageZoom.scale,
+                      "--plate-zoom-y": `${imageZoom.offsetY}%`,
+                    } as CSSProperties)
+                  : undefined
+              }
               className={cn(
                 "h-full w-full",
-                imageFit === "cover" ? "object-cover" : "object-contain p-7",
+                imageFit === "cover"
+                  ? "object-cover"
+                  : cn("object-contain", !imageZoom && "p-7"),
+                imageZoom && "plate-zoom",
                 applyDuotone && "duotone",
                 imageClassName
               )}
             />
           ) : null}
         </div>
+
+        {badge && <div className="absolute top-2.5 left-2.5">{badge}</div>}
 
         {verified && (
           <div className="absolute top-2.5 right-2.5 rounded-full border border-hairline/70 bg-surface/90 px-2 py-0.5">
@@ -184,10 +227,32 @@ export function SpecimenPlate({
           </div>
         </div>
       )}
+
+      {/* Above the stretched link so the control stays clickable. mt-auto
+          pins it to the bottom of a flex-column plate, so buy controls line up
+          across a grid row whose titles wrap to different heights. */}
+      {actions && <div className="relative z-[2] mt-auto pt-4">{actions}</div>}
     </>
   );
 
   const cls = cn("plate", interactive && "plate-interactive", className);
+
+  // Stretched link: the card carries its own controls, so the anchor cannot
+  // wrap them. It becomes an overlay instead — same full-card click target,
+  // but `actions` stays a real, focusable, tappable control above it.
+  if (href && actions) {
+    return (
+      <article className={cn(cls, "rounded-xl")}>
+        {/* Empty by design — `ariaLabel` is its entire accessible name. */}
+        <Link
+          href={href}
+          aria-label={ariaLabel}
+          className="absolute inset-0 z-[1] rounded-xl"
+        />
+        {inner}
+      </article>
+    );
+  }
 
   if (href) {
     return (

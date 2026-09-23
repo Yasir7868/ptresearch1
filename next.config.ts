@@ -49,6 +49,23 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  /**
+   * The gift card lives at /gift-card here. Both live URLs for it are kept
+   * alive: the header link (/digtal-gift-card/ — the live nav's own spelling)
+   * and the WooCommerce product permalink. The product route would otherwise
+   * try to render it from the catalog, where it is a zero-price,
+   * unpurchasable record (content/gift-card.ts).
+   */
+  async redirects() {
+    return [
+      { source: "/digtal-gift-card", destination: "/gift-card", permanent: true },
+      {
+        source: "/product/pt-research-digital-gift-card",
+        destination: "/gift-card",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -102,6 +102,8 @@ export interface StoreApiProduct {
   variations: StoreApiVariationRef[];
   is_in_stock: boolean;
   is_purchasable: boolean;
+  /** WooCommerce sale flag — true when a sale price is active. */
+  on_sale?: boolean;
   /** On a variation record, the selected attributes as a display string. */
   variation?: string;
 }
@@ -110,22 +112,47 @@ export interface StoreApiProduct {
 // Internal model — what the site renders from
 // ---------------------------------------------------------------------------
 
+/**
+ * Live prices for one variation, read from the single getVariations() list
+ * call. `regularPriceMinor` equals `priceMinor` unless that size is discounted.
+ */
+export interface VariationPrice {
+  priceMinor: number;
+  regularPriceMinor: number;
+}
+
 /** One purchasable size of a variable product. Price in minor units. */
 export interface ProductVariation {
   variationId: number;
   /** The size label, e.g. "10mg" (from the parent's Size attribute). */
   size: string;
-  /** Unit price in minor units (cents). */
+  /** Unit price in minor units (cents) — the SALE price while discounted. */
   priceMinor: number;
+  /**
+   * Pre-sale list price in minor units. Equals `priceMinor` when this size is
+   * not discounted, so a strike-through is drawn only where the two differ.
+   */
+  regularPriceMinor: number;
 }
 
 /** A product image, normalized. `alt` falls back to the display name. */
 export interface ProductImage {
   src: string;
   alt: string;
+  /** The store's thumbnail file (a square crop for vial photos), when it has one. */
+  thumbnail?: string;
   width?: number;
   height?: number;
 }
+
+/** A span of paragraph text; `strong` marks the store's <strong> runs. */
+export interface TextRun {
+  text: string;
+  strong: boolean;
+}
+
+/** One paragraph of store copy, as runs, so bold phrases survive mapping. */
+export type RichParagraph = TextRun[];
 
 /** A single FAQ entry parsed from the product description. */
 export interface FaqItem {
@@ -163,10 +190,27 @@ export interface Product {
   kind: "simple" | "variable";
   /** For variable products, the minimum (starting) price in minor units. */
   priceMinor: number;
+  /**
+   * Pre-sale list price in minor units (WooCommerce `regular_price`). Equals
+   * `priceMinor` when the product is not discounted.
+   */
+  regularPriceMinor: number;
+  /** True when WooCommerce reports an active discount on this product. */
+  onSale: boolean;
   currencyMinorUnit: number;
   /** Present + non-empty only for variable products. */
   variations?: ProductVariation[];
+  /**
+   * A simple product's "Size" attribute as the store lists it, e.g. "70mg".
+   * Variable products carry their sizes on `variations` instead.
+   */
+  size?: string;
   bullets: string[];
+  /**
+   * The short description as the product page prints it: the same paragraphs
+   * as `bullets`, with bold runs kept (e.g. the bold research-use-only line).
+   */
+  summary: RichParagraph[];
   usage: string[];
   faq: FaqItem[];
   images: ProductImage[];

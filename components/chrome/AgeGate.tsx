@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * AgeGate — the full-screen deep-green admittance card (DESIGN §7.0):
- * wordmark, heading, the TWO verbatim checkboxes (age + research-use), the
- * role <select>, Accept (green) / Decline (text). Set to 18+ — the spec
- * corrects the live store's internal 21-vs-18 inconsistency to 18 (Terms §2 +
- * Privacy §9), so the verbatim age line renders with 18.
+ * AgeGate — the full-screen deep-green admittance card (DESIGN §7.0) carrying
+ * the live site's age-gate popup copy verbatim: heading, terms line, the TWO
+ * checkboxes (21+ age + research-use), the unlabeled role <select>, Accept /
+ * Decline, and the closing disclaimer. The live gate says 21 while Terms §2 and
+ * Privacy §9 say 18 — the gate copy is kept as published.
  *
  * CRAWLER-SAFE BY DESIGN: this is a client component that renders ON TOP of
  * fully-SSR'd page content. There is NO middleware/proxy blocking and NO
@@ -34,9 +34,6 @@ import { D1_EASE } from "@/components/motion/FadeIn";
 
 const STORAGE_KEY = "pt_age_ok";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
-
-/** Verbatim age line with the spec-mandated 21 → 18 correction (DESIGN §7.0). */
-const CONFIRM_AGE_18 = ageGate.confirmAge.replace("21", "18");
 
 function isConfirmed(): boolean {
   try {
@@ -133,39 +130,30 @@ export function AgeGate() {
             <p className="font-display mt-3.5 text-[20px] font-bold tracking-[-0.02em] text-ink">
               {brandConfig.name}
             </p>
-            <p className="micro-label mt-1.5 !text-[9.5px]">
-              Reference-Grade Peptides
-            </p>
 
             <div className="hairline-rule my-5" />
 
-            <p className="micro-label">Access Verification</p>
             <h2
               id="age-gate-title"
-              className="font-display mt-2.5 text-[1.9rem] leading-[1.05] tracking-[-0.025em] text-ink"
+              className="font-display text-[1.45rem] leading-[1.15] tracking-[-0.02em] text-ink"
             >
-              Research use only.
+              {ageGate.heading}
             </h2>
-            {/* Verbatim ageGate.subtext */}
             <p className="mt-2.5 text-[14px] leading-relaxed text-ink-muted">
               {ageGate.subtext}
             </p>
 
-            <p className="warn-line mt-4 inline-block rounded-md px-2.5 py-1.5 text-[12px] font-medium text-ink">
-              {compliance.ruoBanner}
-            </p>
-
-            {/* The two verbatim confirmation checkboxes (DESIGN §7.0). */}
+            {/* The two verbatim confirmation checkboxes. */}
             <div className="mt-5 flex flex-col gap-3.5">
               <label className="flex cursor-pointer items-start gap-2.5">
                 <Checkbox
                   checked={ageOk}
                   onCheckedChange={(v) => setAgeOk(v === true)}
-                  aria-label={CONFIRM_AGE_18}
+                  aria-label={ageGate.confirmAge}
                   className="mt-0.5"
                 />
                 <span className="text-[13.5px] leading-snug text-ink">
-                  {CONFIRM_AGE_18}
+                  {ageGate.confirmAge}
                 </span>
               </label>
               <label className="flex cursor-pointer items-start gap-2.5">
@@ -181,15 +169,13 @@ export function AgeGate() {
               </label>
             </div>
 
-            {/* Role select — verbatim options (DESIGN §7.0). */}
+            {/* Role select — verbatim options. Unlabeled on the live site; the
+                screen-reader name follows its live id ("researchType"). */}
             <div className="mt-5">
-              <label htmlFor="age-gate-role" className="micro-label">
-                Research role
-              </label>
               <select
-                id="age-gate-role"
+                aria-label="Research type"
                 defaultValue={ageGate.roleOptions[0]}
-                className="mt-1.5 h-10 w-full rounded-lg border border-hairline bg-surface px-3 text-[14px] text-ink"
+                className="h-10 w-full rounded-lg border border-hairline bg-surface px-3 text-[14px] text-ink"
               >
                 {ageGate.roleOptions.map((role) => (
                   <option key={role} value={role}>
@@ -211,6 +197,10 @@ export function AgeGate() {
                 {ageGate.declineLabel}
               </Button>
             </div>
+
+            <p className="warn-line mt-6 rounded-md px-3 py-2.5 text-[12px] leading-relaxed text-ink">
+              {compliance.ageGateDisclaimer}
+            </p>
           </div>
         </motion.div>
       </div>

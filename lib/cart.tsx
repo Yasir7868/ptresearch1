@@ -14,8 +14,8 @@
  * of decimal places in the currency (2 for USD).
  *
  * TOTALS ARE ADAPTER-CANONICAL. The LocalStorage adapter computes totals
- * locally (BOGO-50%, the PT25 coupon, the free-shipping threshold — constants
- * from content/brand-config.ts). That IS correct for the prototype; the
+ * locally (the PT25 coupon and the free-shipping threshold — constants from
+ * content/brand-config.ts). That IS correct for the prototype; the
  * future WooCommerceCartAdapter will return SERVER-canonical totals from
  * `/wp-json/wc/store/v1/cart` responses instead, and no component changes.
  *
@@ -42,14 +42,29 @@ import {
   type ReactNode,
 } from "react";
 import { brandConfig } from "@/content/brand-config";
+import { cartPage } from "@/content/site-copy";
+import { bulkCopy } from "@/content/bulk";
+import { computeTotals, EMPTY_TOTALS as SHARED_EMPTY_TOTALS } from "@/lib/totals";
 
 // ---------------------------------------------------------------------------
 // Data types
 // ---------------------------------------------------------------------------
 
-/** A single cart line, uniquely keyed by `${sku}__${dose}`. */
+/**
+ * One label/value pair carried on a cart line — WooCommerce's "cart item
+ * data". The gift card fills it with the recipient, message and delivery date
+ * the buyer entered (components/giftcard/GiftCardPanel.tsx); nothing else
+ * uses it today. Labels come from content/site-copy.ts, never from a
+ * component.
+ */
+export interface CartItemMeta {
+  label: string;
+  value: string;
+}
+
+/** A single cart line, uniquely keyed by `${sku}__${dose}` (+ meta digest). */
 export interface CartItem {
-  /** Stable identity: `${sku}__${dose}`. Used for all mutations. */
+  /** Stable identity — see `itemKey`. Used for all mutations. */
   key: string;
   sku: string;
   dose: string;
@@ -63,6 +78,24 @@ export interface CartItem {
   productId?: number | undefined;
   /** WooCommerce variation id, when the line is a variation. */
   variationId?: number | undefined;
+  /**
+   * Per-line data entered at add-to-cart time (the gift card's recipient,
+   * message and delivery date). Two lines that differ only here stay separate
+   * — see `itemKey`.
+   */
+  meta?: CartItemMeta[] | undefined;
+  /**
+   * WooCommerce's `sold_individually`: the line is capped at one and its
+   * quantity stepper is retired. True on gift cards.
+   */
+  soldIndividually?: boolean | undefined;
+  /**
+   * The line is not discountable — coupons skip it, though it still counts
+   * toward the free-shipping threshold. True on gift cards: a card keeps its
+   * full face value, so discounting one sells store credit below par.
+   * WooCommerce expresses the same thing as a per-coupon product exclusion.
+   */
+  excludedFromCoupons?: boolean | undefined;
 }
 
 /** Payload the product UI passes to addItem. key is derived internally. */
@@ -83,8 +116,14 @@ export interface AddItemInput {
    */
   variation?: { attribute: string; value: string }[] | undefined;
   image?: string | undefined;
-  /** Quantity to add. Defaults to 1. */
+  /** Quantity to add. Defaults to 1; ignored when `soldIndividually`. */
   qty?: number | undefined;
+  /** Per-line data to carry onto the line (see CartItemMeta). */
+  meta?: CartItemMeta[] | undefined;
+  /** Cap this line at one unit (WooCommerce `sold_individually`). */
+  soldIndividually?: boolean | undefined;
+  /** Keep coupons off this line (see CartItem.excludedFromCoupons). */
+  excludedFromCoupons?: boolean | undefined;
 }
 
 /**
@@ -100,6 +139,22 @@ export interface CartTotals {
   /** Decimal places of the currency (WC Store API convention). USD = 2. */
   currencyMinorUnit: number;
   appliedCoupons: string[];
+  /**
+   * Applied codes that are earning nothing because the order qualifies for
+   * bulk pricing, which promo codes do not apply to. They stay in
+   * `appliedCoupons` (the buyer entered them, and they count again if the
+   * order drops back under the first rung) — this list is what lets the cart
+   * explain the zero.
+   */
+  blockedCoupons: string[];
+  /**
+   * Discountable units in the cart — what the bulk ladder counts
+   * (content/bulk.ts). Gift cards are excluded, as they are from the
+   * discount base.
+   */
+  bulkUnits: number;
+  /** The bulk tier this cart earned, or null below the first rung. */
+  bulkTier: { code: string; percentOff: number } | null;
 }
 
 /** Items + totals returned together by every adapter mutation. */
@@ -187,58 +242,48 @@ const readCoupons = (): string[] => {
   return Array.isArray(parsed) ? (parsed as string[]) : [];
 };
 
+// ---------------------------------------------------------------------------
+// Line identity
+// ---------------------------------------------------------------------------
+
+/** FNV-1a, base36 — short, stable, and no dependency. Not a security hash. */
+const digest = (text: string): string => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+};
+
 /**
- * Local promo math — mirrors the live store's advertised offers:
- *   1. "Buy One Get One 50% Off — auto-applied at checkout": all units in the
- *      cart are sorted by price descending; every 2nd unit is discounted 50%.
- *   2. Coupon PT25 — 25% off the post-BOGO merchandise subtotal.
- *   3. Free shipping over $200 (post-discount); below the threshold shipping
- *      is null (calculated at checkout).
+ * A line's stable identity.
  *
- * PROTOTYPE-ONLY: the Woo adapter replaces all of this with server-canonical
- * totals. Constants come from brandConfig.promos.
+ * `${sku}__${dose}` for an ordinary product, so re-adding a variant
+ * increments it. A line carrying per-line data (a gift card's recipient)
+ * appends a digest of that data, so two $100 gift cards addressed to
+ * different people are two lines — WooCommerce keys its own cart the same way.
+ */
+export function itemKey(input: {
+  sku: string;
+  dose: string;
+  meta?: CartItemMeta[] | undefined;
+}): string {
+  const base = `${input.sku}__${input.dose}`;
+  if (!input.meta || input.meta.length === 0) return base;
+  return `${base}__${digest(input.meta.map((m) => `${m.label}=${m.value}`).join("|"))}`;
+}
+
+/**
+ * Cart totals. The arithmetic lives in lib/totals.ts because the SERVER prices
+ * orders with it too (lib/orders/price.ts) — the number the checkout quotes
+ * and the number the customer is charged must come from one implementation.
+ * This wrapper only narrows CartItem to the fields pricing depends on.
  */
 const computeLocalTotals = (
   items: CartItem[],
   appliedCoupons: string[]
-): CartTotals => {
-  const itemsSubtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-
-  // BOGO 50%: expand lines into unit prices, sort desc, discount every 2nd unit.
-  const units: number[] = [];
-  for (const item of items) {
-    for (let n = 0; n < item.qty; n += 1) units.push(item.price);
-  }
-  units.sort((a, b) => b - a);
-  let bogoDiscount = 0;
-  for (let n = 1; n < units.length; n += 2) {
-    bogoDiscount += Math.floor((units[n] as number) / 2);
-  }
-
-  const couponPct = appliedCoupons.includes(brandConfig.promos.coupon.code)
-    ? brandConfig.promos.coupon.percentOff
-    : 0;
-  const couponDiscount = Math.floor(
-    ((itemsSubtotal - bogoDiscount) * couponPct) / 100
-  );
-
-  const discount = bogoDiscount + couponDiscount;
-  const merchandise = itemsSubtotal - discount;
-
-  const shipping: number | null =
-    items.length > 0 && merchandise >= brandConfig.promos.freeShipping.thresholdMinor
-      ? 0
-      : null;
-
-  return {
-    itemsSubtotal,
-    discount,
-    shipping,
-    total: merchandise + (shipping ?? 0),
-    currencyMinorUnit: 2,
-    appliedCoupons,
-  };
-};
+): CartTotals => computeTotals(items, appliedCoupons);
 
 const snapshot = (): CartSnapshot => {
   const items = readItems();
@@ -270,13 +315,16 @@ export class LocalStorageCartAdapter implements CartAdapter {
   }
 
   addItem(input: AddItemInput): Promise<CartSnapshot> {
-    const key = `${input.sku}__${input.dose}`;
-    const incomingQty = input.qty ?? 1;
+    const key = itemKey(input);
+    // A sold-individually line never grows past one, however it is re-added.
+    const incomingQty = input.soldIndividually ? 1 : (input.qty ?? 1);
     const current = readItems();
     const existing = current.find((i) => i.key === key);
     const next: CartItem[] = existing
       ? current.map((i) =>
-          i.key === key ? { ...i, qty: i.qty + incomingQty } : i
+          i.key === key
+            ? { ...i, qty: input.soldIndividually ? 1 : i.qty + incomingQty }
+            : i
         )
       : [
           ...current,
@@ -290,6 +338,9 @@ export class LocalStorageCartAdapter implements CartAdapter {
             image: input.image,
             productId: input.productId,
             variationId: input.variationId,
+            meta: input.meta,
+            soldIndividually: input.soldIndividually,
+            excludedFromCoupons: input.excludedFromCoupons,
           },
         ];
     writeJSON(LS_ITEMS_KEY, next);
@@ -307,7 +358,10 @@ export class LocalStorageCartAdapter implements CartAdapter {
     const next: CartItem[] =
       qty <= 0
         ? current.filter((i) => i.key !== key)
-        : current.map((i) => (i.key === key ? { ...i, qty } : i));
+        : current.map((i) =>
+            // Removal still works on a sold-individually line; raising it does not.
+            i.key === key ? { ...i, qty: i.soldIndividually ? 1 : qty } : i
+          );
     writeJSON(LS_ITEMS_KEY, next);
     return Promise.resolve(snapshot());
   }
@@ -315,8 +369,14 @@ export class LocalStorageCartAdapter implements CartAdapter {
   applyCoupon(code: string): Promise<CartSnapshot> {
     const normalized = code.trim().toUpperCase();
     if (normalized !== brandConfig.promos.coupon.code) {
+      return Promise.reject(new Error(cartPage.couponNotFound(code.trim())));
+    }
+    // Promo codes do not apply to bulk orders — say so at entry rather than
+    // accepting the code and quietly discounting nothing.
+    const { bulkUnits, bulkTier } = snapshot().totals;
+    if (bulkTier) {
       return Promise.reject(
-        new Error(`Code "${code}" is not valid.`)
+        new Error(bulkCopy.cart.couponBlocked(normalized, bulkUnits))
       );
     }
     const coupons = readCoupons();
@@ -346,14 +406,7 @@ export class LocalStorageCartAdapter implements CartAdapter {
 // React context
 // ---------------------------------------------------------------------------
 
-const EMPTY_TOTALS: CartTotals = {
-  itemsSubtotal: 0,
-  discount: 0,
-  shipping: null,
-  total: 0,
-  currencyMinorUnit: 2,
-  appliedCoupons: [],
-};
+const EMPTY_TOTALS: CartTotals = SHARED_EMPTY_TOTALS;
 
 /** Value shape exposed through useCart() / useCartOptional(). */
 export interface CartContextValue {

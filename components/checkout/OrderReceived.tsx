@@ -1,33 +1,34 @@
 "use client";
 
 /**
- * OrderReceived — demo confirmation (/order-received), Reference Grade.
+ * OrderReceived — order confirmation (/order-received), Reference Grade.
  *
- * Reads the demo order back from sessionStorage (written by CheckoutForm).
- * No order in the session → styled empty state linking home. The payment-
- * instructions panel is a soft feature card carrying HONEST
- * placeholder copy — handles/addresses appear once the store backend is
- * connected. Order numbers render in the batch-id treatment (uppercase
- * tracked Satoshi tabular) and stay EXACT — they are the payment
- * reference a customer copies.
+ * Reads the order receipt back from sessionStorage (written by CheckoutForm
+ * once the processor reports payment complete), then confirms the payment
+ * itself against the gateway via PaymentStatus — the receipt proves what was
+ * ordered, not that it was paid for.
+ * No order in the session → the live "No order found." state. Copy follows
+ * WooCommerce's standard thank-you page (content/site-copy.ts →
+ * orderReceivedPage) and the live card gateway's after-order line. Order
+ * numbers render in the batch-id treatment (uppercase tracked Satoshi
+ * tabular) and stay EXACT.
  */
 
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { compliance } from "@/content/compliance";
-import { brandConfig } from "@/content/brand-config";
-import { shippingPolicy } from "@/content/site-copy";
+import { cartPage, orderReceivedPage } from "@/content/site-copy";
 import { FadeIn } from "@/components/motion/FadeIn";
 import { VerifiedMark } from "@/components/plate/VerifiedMark";
 import { formatMinor } from "@/components/checkout/money";
 import { TotalsLedger } from "@/components/checkout/TotalsLedger";
+import { LineMeta } from "@/components/checkout/LineMeta";
 import { hasVerifiedCoa } from "@/components/checkout/coa-lookup";
+import { PaymentStatus } from "@/components/checkout/PaymentStatus";
 import {
   DEMO_ORDER_KEY,
   paymentMethodInfo,
   readDemoOrder,
-  unitCountOf,
   type DemoOrder,
 } from "@/components/checkout/demo-order";
 
@@ -73,13 +74,9 @@ export function OrderReceived() {
   if (order === null) {
     return (
       <FadeIn className="flex min-h-[40vh] flex-col items-center justify-center gap-4 py-24 text-center">
-        <p className="micro-label">No order found</p>
-        <p className="max-w-[40ch] text-sm text-ink-muted">
-          There is no demo order in this browser session. Orders placed
-          through the demo checkout appear here.
-        </p>
+        <p className="text-[15px] text-ink-muted">{orderReceivedPage.notFound}</p>
         <Button asChild variant="outline" className="mt-2">
-          <Link href="/">Back to home</Link>
+          <Link href="/catalog">{cartPage.returnToShop}</Link>
         </Button>
       </FadeIn>
     );
@@ -92,7 +89,7 @@ export function OrderReceived() {
     ? "—"
     : placed.toLocaleDateString("en-US", {
         year: "numeric",
-        month: "short",
+        month: "long",
         day: "numeric",
       });
 
@@ -100,44 +97,59 @@ export function OrderReceived() {
     <FadeIn className="flex flex-col gap-12">
       {/* Header */}
       <header className="hairline-b pb-8">
-        <p className="micro-label">Order confirmed (demo)</p>
-        <h1 className="mt-3 text-[clamp(1.9rem,3.4vw,3rem)]">
-          Order received
+        <h1 className="text-[clamp(1.9rem,3.4vw,3rem)]">
+          {orderReceivedPage.heading}
         </h1>
+
+        {/* Payment is confirmed against the gateway, not assumed from the
+            redirect (components/checkout/PaymentStatus.tsx). */}
+        {order.gatewaySessionId ? (
+          <div className="mt-5">
+            <PaymentStatus
+              sessionId={order.gatewaySessionId}
+              orderId={order.checkoutId}
+              orderKey={order.checkoutId}
+            />
+          </div>
+        ) : null}
 
         <dl className="mt-6 grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">
           <div>
-            <dt className="micro-label">Order no.</dt>
+            <dt className="micro-label">{orderReceivedPage.orderNumberLabel}</dt>
             <dd className="batch-id mt-1.5 text-green">
               {order.orderNumber}
             </dd>
           </div>
           <div>
-            <dt className="micro-label">Placed</dt>
+            <dt className="micro-label">{orderReceivedPage.dateLabel}</dt>
             <dd className="data-num mt-1.5 text-sm text-ink">{placedLabel}</dd>
           </div>
           <div>
-            <dt className="micro-label">Payment</dt>
-            <dd className="mt-1.5 text-sm text-ink">{method.label}</dd>
+            <dt className="micro-label">{orderReceivedPage.emailLabel}</dt>
+            <dd className="mt-1.5 truncate text-sm text-ink">{order.email}</dd>
           </div>
           <div>
-            <dt className="micro-label">Confirmation to</dt>
-            <dd className="mt-1.5 truncate text-sm text-ink">{order.email}</dd>
+            <dt className="micro-label">{orderReceivedPage.totalLabel}</dt>
+            <dd className="data-num mt-1.5 text-sm text-ink">
+              {formatMinor(order.totals.total, mu)}
+            </dd>
           </div>
         </dl>
       </header>
 
-      {/* Items ledger */}
-      <section aria-label="Order items">
-        <h2 className="micro-label">Items</h2>
+      {/* Order details */}
+      <section aria-label={orderReceivedPage.detailsHeading}>
+        <h2 className="micro-label">{orderReceivedPage.detailsHeading}</h2>
         <div className="ledger-card mt-4">
           <table className="ledger-table">
           <thead>
             <tr>
-              <th>Item</th>
-              <th className="num">Qty</th>
-              <th className="num hidden sm:table-cell">Unit</th>
-              <th className="num">Total</th>
+              <th>{cartPage.columns.product}</th>
+              <th className="num">{cartPage.columns.quantity}</th>
+              <th className="num hidden sm:table-cell">
+                {cartPage.columns.price}
+              </th>
+              <th className="num">{cartPage.columns.subtotal}</th>
             </tr>
           </thead>
           <tbody>
@@ -154,6 +166,7 @@ export function OrderReceived() {
                     )}
                   </p>
                   <p className="micro-label mt-1">{item.dose}</p>
+                  <LineMeta item={item} />
                 </td>
                 <td className="num text-ink">{item.qty}</td>
                 <td className="num hidden text-ink-muted sm:table-cell">
@@ -170,97 +183,32 @@ export function OrderReceived() {
 
         <TotalsLedger
           totals={order.totals}
-          unitCount={unitCountOf(order.items)}
-          shippingNullLabel="To be confirmed"
           className="mt-6 sm:ml-auto sm:max-w-sm"
         />
       </section>
 
-      {/* Payment instructions — the page's feature card (soft) */}
-      <section aria-label="Payment instructions">
+      {/* Payment method — the page's feature card (soft) */}
+      <section aria-label={orderReceivedPage.paymentMethodLabel}>
         <div className="plate">
           <div className="plate-field">
             <div className="hairline-b px-5 py-4">
               <h2 className="micro-label">
-                Payment instructions — {method.label}
+                {orderReceivedPage.paymentMethodLabel} {method.label}
               </h2>
             </div>
             <div className="flex flex-col gap-5 px-5 py-5">
-              <dl className="grid gap-5 sm:grid-cols-2">
-                <div>
-                  <dt className="micro-label">Order total</dt>
-                  <dd className="data-num mt-1.5 text-xl text-green">
-                    {formatMinor(order.totals.total, mu)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="micro-label">Payment reference</dt>
-                  <dd className="batch-id mt-2 !text-[15px] text-green">
-                    {order.orderNumber}
-                  </dd>
-                </div>
-              </dl>
-
               <p className="text-sm leading-relaxed text-ink-muted">
                 {method.instructions}
-              </p>
-
-              <p className="micro-label">
-                Prototype — no payment is collected and no email was sent.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* What happens next */}
-      <section aria-label="What happens next">
-        <h2 className="micro-label">What happens next</h2>
-        <ol className="hairline-y mt-4 divide-y divide-hairline">
-          <li className="flex gap-5 py-5">
-            <span className="data-num text-sm text-green">01</span>
-            <div>
-              <p className="text-sm font-medium text-ink">Payment</p>
-              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-                Send the order total by {method.label} and include{" "}
-                <span className="data-num">{order.orderNumber}</span> as the
-                payment reference.
-              </p>
-            </div>
-          </li>
-          <li className="flex gap-5 py-5">
-            <span className="data-num text-sm text-green">02</span>
-            <div>
-              <p className="text-sm font-medium text-ink">Verification</p>
-              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-                Your order is confirmed once payment is received.{" "}
-                {shippingPolicy.processingTime}.
-              </p>
-            </div>
-          </li>
-          <li className="flex gap-5 py-5">
-            <span className="data-num text-sm text-green">03</span>
-            <div>
-              <p className="text-sm font-medium text-ink">Shipping</p>
-              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-                {brandConfig.promos.shippingSpeed.label} — tracking
-                information is sent when your order ships.
-              </p>
-            </div>
-          </li>
-        </ol>
-      </section>
-
-      {/* RUO warn-line + back to catalog */}
       <div className="text-center">
-        <p className="warn-line inline-block rounded-md px-3 py-1.5 text-[12px] font-medium text-ink">
-          {compliance.ruoBanner}
-        </p>
-        <div className="mt-8">
-          <Button asChild variant="outline">
-            <Link href="/catalog">Back to catalog</Link>
-          </Button>
-        </div>
+        <Button asChild variant="outline">
+          <Link href="/catalog">{cartPage.continueShopping}</Link>
+        </Button>
       </div>
     </FadeIn>
   );

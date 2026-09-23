@@ -1,26 +1,27 @@
 /**
- * Compliance boilerplate — research-use-only (RUO) framing for Primetime
- * Research. Pull these strings verbatim into banners, PDPs, and the footer.
- * RUO framing is a first-class trust element of this site, not fine print.
+ * Compliance lines — research-use-only (RUO) framing for Primetime Research,
+ * VERBATIM from the live site (re-harvested 2026-09-17). RUO framing is a
+ * first-class trust element of this site, not fine print. The live site
+ * carries no FDA disclaimer, so none is defined here.
  */
 
 export const compliance = {
-  /**
-   * Primary RUO banner — prominent placement (top-of-site strip, PDP,
-   * cart/checkout). Verbatim per spec.
-   */
-  ruoBanner: "FOR RESEARCH USE ONLY. Not for human or veterinary use.",
+  /** Top strip of the live homepage. */
+  ruoStrip: "FOR RESEARCH USE ONLY",
 
-  /** FDA disclaimer — required on home and product pages. */
-  fdaDisclaimer:
-    "These statements have not been evaluated by the Food and Drug Administration. " +
-    "These products are not intended to diagnose, treat, cure, or prevent any disease.",
-
-  /** Condensed footer line. */
+  /** Footer, every page. No closing period on the live site. */
   footerNote:
-    "All products sold by Primetime Research are intended for laboratory research use only. " +
-    "Not for human or veterinary use. Not evaluated by the FDA. " +
-    "Not intended to diagnose, treat, cure, or prevent any disease.",
+    "All products are sold for research, laboratory, or analytical purposes only, and are not for human consumption",
+
+  /** Closing line of the live age-gate popup. */
+  ageGateDisclaimer:
+    "All products available on Primetime Research are strictly intended for laboratory research use only. " +
+    "They are not for human consumption, medical treatment, or veterinary use.",
+
+  /** Last paragraph of the WooCommerce short description on live products. */
+  productRuoLine:
+    "For research use only. Not for human or veterinary consumption. " +
+    "Not intended for diagnosis, treatment, cure, or prevention of any disease.",
 } as const;
 
 export type Compliance = typeof compliance;

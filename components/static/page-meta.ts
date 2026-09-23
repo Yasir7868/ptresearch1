@@ -2,7 +2,7 @@
  * Shared per-page metadata builder for the supporting/static routes.
  *
  * The root layout (app/layout.tsx) sets the title.template
- * ("%s | Primetime Research"), the robots INDEXABILITY gate
+ * ("%s - Primetime Research"), the robots INDEXABILITY gate
  * (NEXT_PUBLIC_INDEXABLE), and the default OG/Twitter image. Child routes only
  * supply their own title/description here — `robots` is intentionally NOT set
  * so the layout's noindex-by-default gate is inherited on every page.
@@ -23,7 +23,7 @@ export interface PageMetaInput {
 }
 
 export function pageMetadata({ title, description, path }: PageMetaInput): Metadata {
-  const ogTitle = `${title} | ${brandConfig.name}`;
+  const ogTitle = `${title} - ${brandConfig.name}`;
   const url = `${SITE_URL}${path}`;
 
   return {

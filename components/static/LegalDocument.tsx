@@ -60,15 +60,14 @@ export function LegalDocument({
   updated,
 }: {
   sections: LegalSection[];
-  /** Optional "last reviewed" note shown above the document. */
+  /** Optional "Last Updated" line shown above the document. */
   updated?: string;
 }) {
   return (
     <div className="grid gap-12 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-20">
-      {/* Contents — dot-leader index, sticky on desktop */}
+      {/* Section index — dot-leader, sticky on desktop */}
       <FadeIn>
-        <nav aria-label="Contents" className="lg:sticky lg:top-24">
-          <p className="micro-label mb-4">Contents</p>
+        <nav aria-label="Sections" className="lg:sticky lg:top-24">
           <ol className="flex flex-col">
             {sections.map((section) => (
               <li key={section.heading} className="hairline-t">

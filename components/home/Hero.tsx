@@ -1,12 +1,13 @@
 /**
- * Hero — D3 "Reference Grade" opening movement (DESIGN §7.3).
+ * Hero — D3 "Reference Grade" opening movement (DESIGN §7.3), carrying the
+ * live homepage hero verbatim.
  *
  * Left: kicker `HIGHEST QUALITY` → Satoshi display headline → verbatim body →
- * CTAs (`View Catalog` green / `View COAs` ghost). Right: the store's `99%+`
- * claim as a poster-scale Satoshi TROPHY NUMERAL — deliberately the first
- * thing on the page bigger than the logo — with the honest measured-range
- * caption drawn from the real COAs, beside a specimen plate of the client's
- * branded hero photograph (full color — the vial labels carry the brand).
+ * `View Catalog`. Right: the live trust card — `Trusted by Researchers
+ * Worldwide`, the store's `99%+ Purity` claim as a poster-scale Satoshi TROPHY
+ * NUMERAL, its verbatim line and `View COAs` — beside a specimen plate of the
+ * client's branded hero photograph (full color — the vial labels carry the
+ * brand).
  *
  * Server component; all copy verbatim from content/site-copy.ts. The only
  * motion on the numeral is the amber TickRule draw-in (client leaf) — the
@@ -15,25 +16,19 @@
 
 import Link from "next/link";
 import { heroCopy } from "@/content/site-copy";
-import { compliance } from "@/content/compliance";
 import { SpecimenPlate } from "@/components/plate/SpecimenPlate";
 import { FadeIn, FadeInStagger } from "@/components/motion/FadeIn";
 import { TickRule } from "@/components/home/TickRule";
 
-export function Hero({
-  purityFloor,
-  purityCeil,
-}: {
-  /** Lowest real measured purity across published COAs, e.g. "99.19%". */
-  purityFloor: string;
-  /** Highest real measured purity across published COAs, e.g. "99.56%". */
-  purityCeil: string;
-}) {
+export function Hero() {
+  const { trustStat } = heroCopy;
+  const statNumber = trustStat.value.replace(/%\+?$/, "");
+
   return (
     <section className="paper-grain bg-bg">
-      <div className="mx-auto max-w-7xl px-4 pt-14 pb-10 md:px-6 md:pt-20 md:pb-14">
+      <div className="mx-auto max-w-7xl px-4 pt-14 pb-16 md:px-6 md:pt-20 md:pb-20">
         <div className="grid grid-cols-1 gap-x-12 gap-y-14 lg:grid-cols-12">
-          {/* ── Left: headline + verbatim body + CTAs ── */}
+          {/* ── Left: headline + verbatim body + CTA ── */}
           <FadeInStagger className="lg:col-span-7">
             <FadeIn>
               <p className="micro-label">{heroCopy.eyebrow}</p>
@@ -52,42 +47,38 @@ export function Hero({
             </FadeIn>
 
             <FadeIn>
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="mt-9">
                 <Link
                   href="/catalog"
                   className="inline-flex h-11 items-center justify-center rounded-lg bg-green px-7 text-sm font-[540] tracking-[0.01em] text-surface transition-colors hover:bg-green-deep"
                 >
                   {heroCopy.cta}
                 </Link>
-                <Link
-                  href="/coa"
-                  className="inline-flex h-11 items-center justify-center rounded-lg border border-hairline bg-surface px-7 text-sm font-[540] tracking-[0.01em] text-ink transition-colors hover:border-green"
-                >
-                  {heroCopy.trustCta}
-                </Link>
               </div>
             </FadeIn>
           </FadeInStagger>
 
-          {/* ── Right: trophy numeral + honest caption + specimen plate ── */}
+          {/* ── Right: the live trust card + specimen plate ── */}
           <div className="lg:col-span-5">
             <FadeIn>
-              <p className="trophy-num text-[clamp(4.5rem,14vw,10rem)]">
-                99
+              <p className="micro-label">{heroCopy.trustHeading}</p>
+              <p className="trophy-num mt-4 text-[clamp(4.5rem,14vw,10rem)]">
+                {statNumber}
                 <span className="trophy-pct">
                   %<span className="trophy-plus">+</span>
                 </span>
               </p>
               <TickRule className="mt-3" />
-              {/* Honest, accurate caption — real measured range across the
-                  published third-party COAs (DESIGN §7.3). */}
-              <p className="mt-4 max-w-sm text-[13.5px] leading-relaxed text-ink-muted">
-                measured{" "}
-                <span className="data-num text-green">
-                  {purityFloor}–{purityCeil}
-                </span>{" "}
-                across third-party-tested batches
+              <p className="micro-label mt-4">{trustStat.label}</p>
+              <p className="mt-3 max-w-sm text-[13.5px] leading-relaxed text-ink-muted">
+                {heroCopy.trustBody}
               </p>
+              <Link
+                href="/coa"
+                className="mt-6 inline-flex h-11 items-center justify-center rounded-lg border border-hairline bg-surface px-7 text-sm font-[540] tracking-[0.01em] text-ink transition-colors hover:border-green"
+              >
+                {heroCopy.trustCta}
+              </Link>
             </FadeIn>
 
             <FadeIn className="mt-10">
@@ -115,12 +106,6 @@ export function Hero({
             </FadeIn>
           </div>
         </div>
-
-        {/* Quiet RUO line closing the hero — the persistent band lives in the
-            AnnouncementBar; this is the calm in-page restatement. */}
-        <p className="micro-label hairline-t mt-14 pt-5 !text-[10px]">
-          {compliance.ruoBanner}
-        </p>
       </div>
     </section>
   );

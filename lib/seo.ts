@@ -6,7 +6,8 @@
  *   export const metadata: Metadata = defaultMetadata;
  *
  * `metadataBase` makes relative OG image URLs resolve correctly.
- * `title.template` produces "Page | Primetime Research" on child routes.
+ * `title.template` produces "Page - Primetime Research" on child routes — the
+ * live WordPress title format, kept for the migration.
  *
  * INDEXABILITY GATE: robots defaults to noindex,nofollow unless the env var
  * NEXT_PUBLIC_INDEXABLE === "true". Preview/staging URLs (Railway *.up.railway.app)
@@ -41,7 +42,7 @@ export const defaultMetadata: Metadata = {
 
   title: {
     default: brandConfig.name,
-    template: `%s | ${brandConfig.name}`,
+    template: `%s - ${brandConfig.name}`,
   },
   description: brandConfig.hero.subhead,
 

@@ -1,310 +1,389 @@
 "use client";
 
 /**
- * CoaLibraryView — the heart of the Lab Results library (D3 §9 + judge-panel
- * grafts #1/#2/#9): the certificate WALL of specimen plates with a table-view
- * toggle.
+ * CoaLibraryView — the live /coa/ page: a search box over a list of products,
+ * each with Purity / Endotoxin buttons. A button opens the certificate PDF in
+ * a panel beside the product's price, a dosage picker for sized products,
+ * Add to Cart and "Open PDF in New Tab".
  *
- *   - Wall mode: one SpecimenPlate per published certificate. Where a real
- *     page-1 thumbnail of the certificate PDF exists (content/coa-thumbs.json)
- *     the plate field shows the duotoned document; otherwise the field is a
- *     typeset record card — the trophy purity numeral on surface. Every plate
- *     carries the earned VerifiedMark (real coaUrl only), the verbatim method
- *     line, the batch id parsed from the certificate filename, and the
- *     Purity / Endotoxin PDF buttons. Below the wall, the honest "Pending
- *     publication" index lists every compound without a published certificate.
- *   - Table mode (graft #9): the full-catalog ledger — compound / category /
- *     purity / certificate links — via CoaLibraryTable.
+ * Measurements, colors and the system font stack are the live widget's own
+ * (it does not use the site theme), so the page reads the same as
+ * ptresearch.shop/coa/. Prices, sizes and cart lines come from the live
+ * catalog; a line added here is the same line the product page adds.
  *
- * All purity figures, URLs, and batch ids are REAL data from coa-map.json.
- * Links point at exactly what the live store publishes — known mislabels live
- * in `_meta.data_quality_flags` for client intake and are never "corrected"
- * here (graft #11). No certificate → no number.
+ * `.landing` hands h1–h4 styling back to the utilities (see globals.css).
  */
 
-import { useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
-import { SpecimenPlate } from "@/components/plate/SpecimenPlate";
-import { FadeIn } from "@/components/motion/FadeIn";
-import { Button } from "@/components/ui/button";
-import {
-  CoaLibraryTable,
-  type CoaRow,
-} from "@/components/static/CoaLibraryTable";
+import { Dialog as DialogPrimitive } from "radix-ui";
+import { UrlQuerySync } from "@/components/catalog/UrlQuerySync";
+import { coaPage, productPage } from "@/content/site-copy";
+import { track } from "@/lib/analytics";
+import { useCart } from "@/lib/cart";
+import { formatMinor, formatPriceRange } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+/** The live widget's font stack. */
+const FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
 // ---------------------------------------------------------------------------
-// Row shapes (serializable — assembled server-side in app/coa/page.tsx)
+// Row shape (serializable — assembled server-side in app/(store)/coa/page.tsx)
 // ---------------------------------------------------------------------------
 
-export interface CertCard {
-  slug: string;
+export interface CoaProduct {
+  productId: number;
+  sku: string;
+  /** Mapper display name — what the cart line shows. */
   displayName: string;
-  categoryName: string;
-  /** Real measured purity from the certificate, e.g. "99.28%". */
-  purity: string;
-  coaUrl: string;
+  image?: string;
+  priceMinor: number;
+  currencyMinorUnit: number;
+  /** Empty for a simple product. */
+  variations: { variationId: number; size: string; priceMinor: number }[];
+  available: boolean;
+}
+
+export interface CoaItem {
+  id: number;
+  name: string;
+  /** Certificate lot number, e.g. "PTR-9628420-P" (the homepage lookup sends it). */
+  batch?: string;
+  image?: string;
+  purityUrl: string;
+  /** Absent → the row shows only the Purity button, as live. */
   endotoxinUrl?: string;
-  /** Batch id parsed from the certificate filename, e.g. "PTR-3664990". */
-  batchId?: string;
-  /** Local page-1 thumbnail of the purity certificate, when rendered. */
-  thumbSrc?: string;
+  /** Absent when the store no longer sells the product. */
+  product?: CoaProduct;
 }
 
-export interface PendingRow {
-  slug: string;
-  displayName: string;
-  categoryName: string;
-}
+type DocType = "purity" | "endotoxin";
 
 // ---------------------------------------------------------------------------
-// Bits
+// List row
 // ---------------------------------------------------------------------------
 
-/** "99.28%" → { value: "99.28", unit: "%" } for the trophy-pct treatment. */
-function purityParts(purity: string): { value: string; unit: string } {
-  const m = purity.match(/^([\d.]+)(.*)$/);
-  return m
-    ? { value: m[1], unit: m[2] || "%" }
-    : { value: purity, unit: "" };
-}
+const badgeClass =
+  "cursor-pointer rounded-full px-4 py-2.5 text-xs leading-[18px] font-semibold text-white transition-opacity duration-200 hover:opacity-[0.92] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#24335d]";
 
-/** The verbatim method line that sits beside every purity figure (DESIGN §9). */
-const METHOD_LINE = "HPLC + Mass Spectrometry";
-
-function TrophyPurity({
-  purity,
-  className,
+function CoaRow({
+  item,
+  onOpen,
 }: {
-  purity: string;
-  className?: string;
+  item: CoaItem;
+  onOpen: (doc: DocType) => void;
 }) {
-  const { value, unit } = purityParts(purity);
-  return (
-    <span className={cn("trophy-num", className)}>
-      {value}
-      {unit ? <span className="trophy-pct">{unit}</span> : null}
-    </span>
-  );
-}
-
-function CertPlate({ cert }: { cert: CertCard }) {
-  const field = cert.thumbSrc ? (
-    // Real page 1 of the purity certificate (graft #1), duotoned into the
-    // green/bone ramp so every document reads as one printed collection.
-    <Image
-      src={cert.thumbSrc}
-      alt={`First page of the ${cert.displayName} purity certificate`}
-      width={640}
-      height={905}
-      sizes="(min-width: 1024px) 370px, (min-width: 640px) 46vw, 92vw"
-      className="duotone h-full w-full object-cover object-top"
-    />
-  ) : (
-    // No rendered thumbnail — the typeset record card: the trophy purity
-    // numeral IS the figure (DESIGN §4). The certificate itself is one click
-    // below.
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <TrophyPurity
-        purity={cert.purity}
-        className="text-[clamp(3rem,8vw,4.25rem)]"
-      />
-      <span className="micro-label">Measured purity</span>
-    </div>
-  );
+  const purityOnly = !item.endotoxinUrl;
 
   return (
-    <SpecimenPlate
-      verified
-      fieldRatio="1 / 1.25"
-      field={field}
-      eyebrow={cert.categoryName}
-      title={
-        <Link
-          href={`/product/${cert.slug}`}
-          className="transition-colors hover:text-green"
-        >
-          {cert.displayName}
-        </Link>
-      }
-      record={
-        <div>
-          {cert.thumbSrc ? (
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <TrophyPurity purity={cert.purity} className="text-[2.4rem]" />
-              <span>{METHOD_LINE}</span>
-            </div>
-          ) : (
-            <span>{METHOD_LINE}</span>
-          )}
-          {cert.batchId ? (
-            <p className="batch-id mt-2 text-ink-muted">
-              Batch
-              <span aria-hidden="true" className="batch-tick">
-                ·
-              </span>
-              {cert.batchId}
-            </p>
+    <div className="mb-3.5 flex items-center justify-between gap-4 rounded-2xl border border-[#e6e6e6] bg-white px-5 py-[18px] max-md:flex-col max-md:items-start">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="relative size-[54px] shrink-0 overflow-hidden rounded-xl bg-[#f3f3f3]">
+          {item.image ? (
+            <Image src={item.image} alt="" fill sizes="54px" className="object-cover" />
           ) : null}
         </div>
-      }
-      footer={
-        <div className="flex flex-wrap gap-2">
-          <Button asChild size="sm">
-            <a
-              href={cert.coaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Purity Certificate (PDF)
-            </a>
-          </Button>
-          {cert.endotoxinUrl ? (
-            <Button asChild size="sm" variant="outline">
-              <a
-                href={cert.endotoxinUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Endotoxin Certificate (PDF)
-              </a>
-            </Button>
-          ) : null}
-        </div>
-      }
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// The view (wall ⇄ table)
-// ---------------------------------------------------------------------------
-
-type ViewMode = "wall" | "table";
-
-function ToggleButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "border-b-2 pb-1 text-[13px] font-medium tracking-[0.01em] transition-colors",
-        active
-          ? "border-green text-green"
-          : "border-transparent text-ink-muted hover:text-ink"
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-export function CoaLibraryView({
-  certs,
-  pending,
-  tableRows,
-}: {
-  certs: CertCard[];
-  pending: PendingRow[];
-  tableRows: CoaRow[];
-}) {
-  const [view, setView] = useState<ViewMode>("wall");
-
-  return (
-    <div>
-      {/* Section head + the view toggle (graft #9) */}
-      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
         <div>
-          <p className="micro-label">Verified batches</p>
-          <h2 className="mt-3 text-[clamp(1.9rem,3.4vw,3rem)]">
-            Every published certificate
-          </h2>
-        </div>
-        <div
-          role="group"
-          aria-label="Library view"
-          className="flex items-baseline gap-6"
-        >
-          <ToggleButton active={view === "wall"} onClick={() => setView("wall")}>
-            Certificate wall
-          </ToggleButton>
-          <ToggleButton
-            active={view === "table"}
-            onClick={() => setView("table")}
-          >
-            Table view
-          </ToggleButton>
+          <div className="mb-1 text-[11px] tracking-[0.5px] text-[#9a9a9a]">
+            {coaPage.productNameLabel}
+          </div>
+          <div className="text-lg leading-[1.2] font-bold text-[#1a1a1a]">{item.name}</div>
         </div>
       </div>
 
-      {view === "wall" ? (
-        <>
-          {/* The wall of certificates */}
-          <div className="mt-12 grid grid-cols-1 gap-x-8 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
-            {certs.map((cert) => (
-              <FadeIn key={cert.slug}>
-                <CertPlate cert={cert} />
-              </FadeIn>
-            ))}
-          </div>
+      <div
+        className={cn(
+          "flex shrink-0 flex-wrap gap-2.5",
+          purityOnly ? "w-[180px] justify-center" : "max-md:w-full"
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => onOpen("purity")}
+          className={cn(badgeClass, "bg-[#24335d]", purityOnly && "w-40 text-center")}
+        >
+          {coaPage.purityButton}
+        </button>
+        {item.endotoxinUrl ? (
+          <button
+            type="button"
+            onClick={() => onOpen("endotoxin")}
+            className={cn(badgeClass, "bg-[#182443]")}
+          >
+            {coaPage.endotoxinButton}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
-          {/* Pending publication — honesty as a feature (DESIGN §9.3) */}
-          <div className="mt-24">
-            <div className="flex flex-wrap items-baseline justify-between gap-4">
-              <p className="micro-label">Pending publication</p>
-              <span className="data-num text-[13px] text-ink-muted">
-                {pending.length} compounds
-              </span>
+// ---------------------------------------------------------------------------
+// Certificate panel (modal)
+// ---------------------------------------------------------------------------
+
+const cardClass = "rounded-2xl border border-[#e8ebf0] bg-white px-[18px] py-4";
+const actionClass =
+  "inline-flex min-h-12 w-full items-center justify-center rounded-[14px] px-[18px] py-3.5 text-[15px] font-bold transition-colors duration-200 max-md:min-h-[46px] max-md:text-sm";
+
+function CertificateModal({
+  item,
+  doc,
+  onClose,
+}: {
+  item: CoaItem;
+  doc: DocType;
+  onClose: () => void;
+}) {
+  const { addItem } = useCart();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const [size, setSize] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "adding" | "added">("idle");
+
+  const product = item.product;
+  const sizes = product?.variations ?? [];
+  const selected = sizes.find((v) => v.size === size);
+  const needsSize = sizes.length > 0 && !selected;
+
+  const pdfUrl = (doc === "endotoxin" && item.endotoxinUrl) || item.purityUrl;
+  const docTitle =
+    doc === "purity" ? coaPage.purityCertificate : coaPage.endotoxinCertificate;
+  const docName = doc === "purity" ? coaPage.purityButton : coaPage.endotoxinButton;
+
+  // A range until a dosage is picked, as live.
+  const price = product
+    ? selected
+      ? formatMinor(selected.priceMinor, product.currencyMinorUnit)
+      : formatPriceRange(product)
+    : null;
+
+  const addLabel = !product?.available
+    ? productPage.outOfStockButton
+    : needsSize
+      ? coaPage.selectDosage
+      : status === "adding"
+        ? coaPage.adding
+        : status === "added"
+          ? coaPage.added
+          : coaPage.addToCart;
+
+  const handleAdd = async () => {
+    if (!product || needsSize) return;
+    const dose = selected?.size ?? "";
+    const priceMinor = selected?.priceMinor ?? product.priceMinor;
+    setStatus("adding");
+    try {
+      await addItem({
+        sku: product.sku,
+        dose,
+        name: product.displayName,
+        price: priceMinor,
+        productId: product.productId,
+        variationId: selected?.variationId,
+        variation: selected ? [{ attribute: "Size", value: selected.size }] : undefined,
+        image: product.image,
+      });
+      track("add_to_cart", { sku: product.sku, dose, qty: 1, price_cents: priceMinor });
+      setStatus("added");
+    } catch {
+      window.alert(coaPage.addError);
+      setStatus("idle");
+    }
+  };
+
+  return (
+    <DialogPrimitive.Root open onOpenChange={(open) => !open && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
+          className="landing fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(17,24,39,0.58)] p-5 leading-normal max-md:items-end max-md:p-2.5"
+          style={{ fontFamily: FONT_STACK }}
+        >
+          <DialogPrimitive.Content
+            onOpenAutoFocus={(e) => {
+              e.preventDefault();
+              closeRef.current?.focus();
+            }}
+            className={cn(
+              "grid h-[min(680px,calc(100dvh-40px))] w-[min(1040px,100%)] grid-cols-[minmax(0,1.65fr)_380px] overflow-hidden rounded-[22px] bg-white shadow-[0_30px_80px_rgba(0,0,0,0.18)] outline-none",
+              "md:max-[980px]:h-[min(640px,calc(100dvh-32px))] md:max-[980px]:grid-cols-[1.2fr_340px]",
+              "max-md:h-[calc(100dvh-20px)] max-md:w-full max-md:grid-cols-1 max-md:grid-rows-[max(52vh,300px)_minmax(0,1fr)] max-md:rounded-[20px_20px_0_0]"
+            )}
+          >
+            {/* Left: the certificate */}
+            <div className="relative h-full min-w-0 bg-[#eef1f6]">
+              <iframe
+                src={`${pdfUrl}#view=FitH&zoom=page-width`}
+                title={`${item.name} — ${docTitle}`}
+                className="size-full border-0 bg-[#eef1f6]"
+              />
             </div>
-            <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-ink-muted">
-              The compounds below do not have a certificate published on the
-              store yet. No purity number is shown until a certificate is.
-            </p>
-            <ul className="hairline-t mt-6">
-              {pending.map((row) => (
-                <li key={row.slug} className="hairline-b">
-                  <Link
-                    href={`/product/${row.slug}`}
-                    className="group flex items-baseline gap-4 py-3.5"
+
+            {/* Right: product panel */}
+            <div
+              className={cn(
+                "flex min-w-0 flex-col gap-[18px] overflow-y-auto border-l border-[#edf0f5] bg-white px-7 pt-7 pb-6",
+                "md:max-[980px]:p-[22px]",
+                "max-md:gap-3.5 max-md:border-t max-md:border-l-0 max-md:px-4 max-md:pt-[18px] max-md:pb-4"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3.5">
+                <div className="min-w-0">
+                  <DialogPrimitive.Title className="m-0 text-2xl leading-[1.15] font-extrabold break-words text-[#1f2937] max-[980px]:text-[22px]">
+                    {item.name}
+                  </DialogPrimitive.Title>
+                  <DialogPrimitive.Description className="mt-1.5 text-base leading-[1.35] text-[#8d97a6] max-md:text-sm">
+                    {docTitle}
+                  </DialogPrimitive.Description>
+                </div>
+                <DialogPrimitive.Close
+                  ref={closeRef}
+                  aria-label="Close"
+                  className="flex size-[38px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#f4f5f7] text-[22px] leading-none text-[#d25b7f] focus-visible:outline-2 focus-visible:outline-[#24335d]"
+                >
+                  &times;
+                </DialogPrimitive.Close>
+              </div>
+
+              {sizes.length > 0 ? (
+                <div className={cardClass}>
+                  <div className="mb-3 text-[11px] font-bold tracking-[0.8px] text-[#8a8f98] uppercase">
+                    {coaPage.dosageLabel}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {sizes.map((v) => {
+                      const active = v.size === size;
+                      return (
+                        <button
+                          key={v.variationId}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => {
+                            setSize(v.size);
+                            setStatus("idle");
+                          }}
+                          className={cn(
+                            "cursor-pointer rounded-full px-[18px] py-2.5 text-[13px] leading-normal font-bold text-white transition-[background-color,transform,box-shadow] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#24335d]",
+                            active
+                              ? "scale-[1.04] bg-[#24335d] shadow-[0_0_0_3px_rgba(36,51,93,0.25)]"
+                              : "bg-[#182443] hover:bg-[#24335d]"
+                          )}
+                        >
+                          {v.size}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {price ? (
+                <div className={cardClass}>
+                  <div className="mb-2.5 text-[13px] text-[#8a8f98]">{coaPage.priceLabel}</div>
+                  <div className="text-[22px] leading-none font-extrabold text-[#1f2937] max-md:text-xl">
+                    {price}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-3.5">
+                {product ? (
+                  <button
+                    type="button"
+                    onClick={handleAdd}
+                    disabled={!product.available || needsSize || status === "adding"}
+                    className={cn(
+                      actionClass,
+                      "cursor-pointer bg-[#24335d] text-white hover:bg-[#1f2d52] disabled:cursor-not-allowed disabled:opacity-75"
+                    )}
                   >
-                    <span className="font-display text-[17px] leading-snug font-semibold tracking-[-0.01em] text-ink transition-colors group-hover:text-green">
-                      {row.displayName}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className="mb-[5px] min-w-6 flex-1 border-b border-dotted border-hairline transition-colors group-hover:border-ink-muted"
-                    />
-                    <span className="micro-label hidden sm:inline">
-                      {row.categoryName}
-                    </span>
-                    <span className="data-num shrink-0 text-[13px] text-ink-muted">
-                      Certificate pending
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </>
-      ) : (
-        <div className="mt-12">
-          <CoaLibraryTable rows={tableRows} />
-          <p className="mt-4 max-w-3xl text-[13px] leading-relaxed text-ink-muted">
-            The full catalog, one row per compound. Certificates are
-            batch-specific — the batch number is printed on each certificate.
-          </p>
-        </div>
-      )}
+                    {addLabel}
+                  </button>
+                ) : null}
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noopener"
+                  className={cn(
+                    actionClass,
+                    "border border-[#d6dff5] bg-[#edf2ff] text-[#24335d] hover:bg-[#e7edff]"
+                  )}
+                >
+                  {coaPage.openPdf}
+                </a>
+              </div>
+
+              <div className={cardClass}>
+                <div className="mb-2.5 text-[13px] text-[#8a8f98]">
+                  {coaPage.selectedDocumentLabel}
+                </div>
+                <div className="text-base font-bold text-[#1f2937]">{docName}</div>
+              </div>
+
+              <div className="flex-1" />
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Overlay>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The view
+// ---------------------------------------------------------------------------
+
+export function CoaLibraryView({ items }: { items: CoaItem[] }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState<{ item: CoaItem; doc: DocType } | null>(null);
+
+  // Product name, or the batch number the homepage lookup sends (/coa?q=…).
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q
+      ? items.filter(
+          (item) =>
+            item.name.toLowerCase().includes(q) ||
+            Boolean(item.batch?.toLowerCase().includes(q))
+        )
+      : items;
+  }, [items, query]);
+
+  return (
+    <div
+      className="mx-auto max-w-[1100px] px-6 py-10 leading-normal max-md:px-4 max-md:py-6"
+      style={{ fontFamily: FONT_STACK }}
+    >
+      <Suspense fallback={null}>
+        <UrlQuerySync onQuery={setQuery} />
+      </Suspense>
+
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={coaPage.searchPlaceholder}
+        aria-label={coaPage.searchPlaceholder}
+        className="mb-5 block h-[39px] w-full rounded-[3px] border border-[#666] bg-white px-4 py-2 text-sm text-black outline-none placeholder:text-[#757575] focus:border-[#333]"
+      />
+
+      <div>
+        {visible.map((item) => (
+          <CoaRow
+            key={item.id}
+            item={item}
+            onOpen={(doc) => setOpen({ item, doc })}
+          />
+        ))}
+      </div>
+
+      {open ? (
+        <CertificateModal
+          key={`${open.item.id}-${open.doc}`}
+          item={open.item}
+          doc={open.doc}
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import type { FaqItem } from "@/lib/woo/types";
+import { productPage } from "@/content/site-copy";
 
 export function ProductFaq({ faq }: { faq: FaqItem[] }) {
   const items = faq.filter((item) => item.q && item.a);
@@ -22,9 +23,8 @@ export function ProductFaq({ faq }: { faq: FaqItem[] }) {
 
   return (
     <section aria-labelledby="pdp-faq" className="hairline-t py-12 md:py-16">
-      <p className="micro-label mb-3">Product FAQ</p>
       <h2 id="pdp-faq" className="text-[clamp(1.9rem,3.4vw,3rem)] text-ink">
-        Frequently asked questions
+        {productPage.faqHeading}
       </h2>
       <Accordion
         type="single"

@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cache } from "react";
-import type { CoaMap, Product, StoreApiProduct } from "./types";
+import type { CoaMap, Product, StoreApiProduct, VariationPrice } from "./types";
 import { getProduct, getProducts, getVariations, StoreApiError } from "./store-api";
 import { mapProduct } from "./mapper";
 import { CATEGORIES, categoryForSlug } from "@/content/taxonomy";
@@ -68,14 +68,25 @@ function variationIdsOf(products: StoreApiProduct[]): number[] {
   return ids;
 }
 
-/** Fetch all given variations in one list request and build a variationId -> priceMinor map. */
-async function fetchVariationPrices(ids: number[]): Promise<Record<number, number>> {
+/**
+ * Fetch all given variations in one list request and build a
+ * variationId -> { priceMinor, regularPriceMinor } map. The regular price is
+ * what makes a per-size discount visible on the card and the PDP.
+ */
+async function fetchVariationPrices(
+  ids: number[]
+): Promise<Record<number, VariationPrice>> {
   if (ids.length === 0) return {};
   const results = await getVariations(ids);
-  const prices: Record<number, number> = {};
+  const prices: Record<number, VariationPrice> = {};
   for (const v of results) {
     const minor = parseInt(v.prices?.price ?? "", 10);
-    if (Number.isFinite(minor)) prices[v.id] = minor;
+    if (!Number.isFinite(minor)) continue;
+    const regular = parseInt(v.prices?.regular_price ?? "", 10);
+    prices[v.id] = {
+      priceMinor: minor,
+      regularPriceMinor: Number.isFinite(regular) && regular > minor ? regular : minor,
+    };
   }
   return prices;
 }
