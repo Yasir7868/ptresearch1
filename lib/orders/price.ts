@@ -185,6 +185,10 @@ export async function priceSubmittedCart(
 
   const totals = computeTotals(
     priced.map((l) => ({
+      // productId is load-bearing: bulk tiers are earned per product across
+      // its strengths (lib/bulk.ts). Dropping it here would silently price
+      // every order at full price no matter how many units were bought.
+      productId: l.productId,
       price: l.unitPriceMinor,
       qty: l.qty,
       excludedFromCoupons: l.excludedFromCoupons,

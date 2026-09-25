@@ -309,19 +309,50 @@ Volume pricing. One ladder, four surfaces, one source of truth.
 
 - **`content/bulk.ts`** — the tier ladder (`bulkTiers`) and every string. This
   is the only file to edit when pricing changes.
-- **`lib/bulk.ts`** — the math (`tierForUnits`, `bulkDiscountMinor`,
-  `unitsToNextTier`). Pure, isomorphic, no I/O.
+- **`lib/bulk.ts`** — the math (`bulkGroups`, `bulkDiscountMinor`,
+  `tierForUnits`). Pure, isomorphic, no I/O.
 - **`components/landing/BulkOrder.tsx`** — the homepage section (after the COA
   section, `#bulk`).
 - **`app/(store)/bulk/page.tsx`** + **`components/bulk/*`** — the page: tier
-  cards, the order builder, why-bulk, FAQ, and the quote form (`#quote`).
-- **`lib/cart.tsx`** — `computeLocalTotals` applies the earned tier
-  automatically; `CartTotals` gained `bulkUnits`, `bulkTier` and
-  `blockedCoupons`.
+  cards, the product grid + order rail, why-bulk, FAQ, quote form (`#quote`).
+- **`lib/totals.ts`** — applies the tiers; shared by the cart and the server's
+  order pricing so both charge the same number.
 
-A **unit** is one vial, whatever its size. Units are counted across the whole
-order, excluding lines flagged `excludedFromCoupons` (gift cards) — the same
-lines that are excluded from the discount base.
+### Per product, not per order
+
+Owner directive, 2026-09-25, from the reference bulk page. **The tiers are
+earned by one product's unit count, not the order's.**
+
+| Units of ONE product | Discount on that product |
+|---|---|
+| 10+ | 40% |
+| 50+ | 50% |
+
+A **unit** is one vial, whatever its strength. Units are counted **per
+compound across its strengths**, so five 10mg plus five 30mg vials of the same
+compound are 10 units of it and qualify — the buyer mixes strengths freely.
+Each product earns its own tier independently: a 50-unit compound sits on the
+top rung while a 10-unit compound on the same order sits on the first, and a
+compound below 10 units is simply charged full price without blocking the
+others. Gift cards are outside the count and the discount.
+
+This replaced an order-wide ladder, which let someone reach a deep discount
+with one vial of ten different compounds — not what volume pricing is for.
+
+**The percentages come from the reference page, not from this store's margins.
+Confirm them before launch.** They live in `bulkTiers` and every surface
+follows.
+
+Verified against the live catalog through `/api/payment/embedded-session`
+(the server prices every order, so these are the numbers that get charged):
+
+| Order | Result |
+|---|---|
+| 1 unit each of two products | no discount |
+| 10 units of one product | 40% off it |
+| 5 + 5 of two strengths of one product | **40% off — strengths counted together** |
+| 10 of product X + 1 of product Y | 40% off X only |
+| 50 units of one product | 50% off it |
 
 ### Promo codes do not apply to bulk orders
 
@@ -336,12 +367,10 @@ pricing — `PT25` is not applied, whether or not it would have been worth more.
   starts counting again if the order drops back under the threshold. The
   totals ledger names it so the zero is never mysterious.
 
-**This makes the ladder's first rung load-bearing.** Because the two can never
-combine, a first rung below `PT25`'s 25% would mean the 5th vial costs a buyer
-*more* than the 4th. Every rung must be `>= brandConfig.promos.coupon`
-`.percentOff` for as long as that coupon runs — the defaults in
-`content/bulk.ts` (25 / 30 / 35 / 40) are set to satisfy that and are
-**placeholder margins to confirm before launch**.
+Every rung must stay `>= brandConfig.promos.coupon.percentOff` for as long as
+that coupon runs — otherwise, since the two can never combine, the 10th vial
+would cost a buyer *more* than the 9th. At 40 / 50 against `PT25`'s 25 there
+is plenty of headroom.
 
 ### What to do in WooCommerce
 
@@ -353,12 +382,21 @@ checkout does not honour.
 **1. Create one coupon per tier** (Marketing → Coupons). Codes must match
 `bulkTiers[].code` in `content/bulk.ts`:
 
-| Code | Type | Amount | Minimum quantity |
+| Code | Type | Amount | Minimum quantity **of one product** |
 |---|---|---|---|
-| `BULK25` | Percentage discount | 25 | 5 |
-| `BULK30` | Percentage discount | 30 | 10 |
-| `BULK35` | Percentage discount | 35 | 25 |
-| `BULK40` | Percentage discount | 40 | 50 |
+| `BULK40` | Percentage discount | 40 | 10 |
+| `BULK50` | Percentage discount | 50 | 50 |
+
+**The per-product rule is the hard part in WooCommerce.** Core coupons count
+the whole cart, so a plain "minimum quantity 10" coupon would fire on ten
+different single-vial lines — the exact thing this model exists to prevent,
+and it would discount the entire cart rather than the one compound that
+earned it. Both behaviours need the plugin route below (Advanced Coupons calls
+these *product quantity* conditions plus a *products* restriction), or a
+`woocommerce_before_calculate_totals` snippet that groups cart items by
+`get_product_id()` — summing variations into their parent — and applies a
+per-line discount to each group that reaches the threshold. Mirror
+`lib/bulk.ts` `bulkGroups()`; it is the reference implementation.
 
 For each coupon, under **Usage restriction**:
 
@@ -374,37 +412,36 @@ Core WooCommerce coupons have **no minimum-quantity field** — only minimum
 spend. Two ways to get the quantity rule:
 
 - **Plugin route (simplest):** *Advanced Coupons* or *WooCommerce Extended
-  Coupon Features* both add a "minimum quantity" restriction and auto-apply.
-  Turn **auto-apply** on for all four so the buyer never types a code.
-- **Code route (no plugin):** add a snippet that applies the right coupon on
-  `woocommerce_before_calculate_totals` based on the cart's item count, and
-  removes the lower ones. The thresholds are the `minUnits` column above.
+  Coupon Features* add per-product quantity conditions and auto-apply. Turn
+  **auto-apply** on for both so the buyer never types a code.
+- **Code route (no plugin):** a `woocommerce_before_calculate_totals` snippet
+  that groups cart items by parent product id, sums their quantities, and
+  discounts each qualifying group's lines. Thresholds are the `minUnits`
+  column above.
 
 **2. Cap `PT25` so it cannot reach a bulk order.** *Individual use only* on the
 bulk coupons stops the two being applied together, but it does not stop a
 buyer who applies `PT25` *first* from keeping it on a 30-unit order that never
 auto-applied a bulk coupon. Close that by editing the `PT25` coupon and
-setting a **maximum quantity** of one below your first rung (4, with the
+setting a **maximum quantity** of one below the first rung (9, with the
 default ladder). That field is a plugin feature — the same *Advanced Coupons*
 / *Extended Coupon Features* plugin from step 1 provides it. Without a plugin,
 the `woocommerce_before_calculate_totals` snippet must call
 `WC()->cart->remove_coupon( 'PT25' )` whenever the item count reaches the
 first rung.
 
-**3. Free shipping from 10 units.** The ladder gives free shipping at the
-`10+` rung regardless of order total (`bulkFreeShippingMinUnits` in
-`content/bulk.ts`), which is more generous than the standing "$200+" rule.
+**3. Free shipping on any bulk order.** Once any product reaches its minimum
+the order ships free regardless of total (`earnsFreeShipping` in
+`lib/bulk.ts`), which is more generous than the standing "$200+" rule.
 In WooCommerce: Settings → Shipping → your zone → add a **Free shipping**
 method with *A minimum order amount OR a coupon*, then tick *Allow free
-shipping* on `BULK30`, `BULK35` and `BULK40`. Keep the existing $200
-free-shipping method in place alongside it.
+shipping* on `BULK40` and `BULK50`. Keep the existing $200 free-shipping
+method in place alongside it.
 
-**4. Confirm the margins.** The ladder ships at 25 / 30 / 35 / 40 because
-codes cannot combine with bulk: a first rung under `PT25`'s 25% would make the
-5th vial cost *more* than the 4th. Those are placeholders — set your real
-numbers in `content/bulk.ts` and mirror them in the coupons above. If you
-retire `PT25` entirely (`brandConfig.promos.coupon`), the floor goes away and
-the ladder can start wherever you like.
+**4. Confirm the margins.** The ladder ships at 40 / 50, taken from the
+reference bulk page rather than from your margins. Set your real numbers in
+`content/bulk.ts` and mirror them in the coupons above. Whatever you choose,
+keep the first rung at or above `PT25`'s 25% while that coupon runs.
 
 **5. Point the quote form somewhere.** Set `BULK_QUOTE_WEBHOOK_URL` (and
 optionally `BULK_QUOTE_WEBHOOK_TOKEN`) to an endpoint that delivers the

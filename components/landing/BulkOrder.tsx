@@ -94,7 +94,7 @@ export function BulkOrder() {
                       {tier.label}
                     </span>
                     <span className="mt-0.5 block text-[13px] text-steel">
-                      {tier.perk}
+                      {copy.unitsHeading}
                     </span>
                   </th>
                   <td className="px-5 py-3.5 text-right align-top text-[18px] font-extrabold text-cobalt tabular-nums">

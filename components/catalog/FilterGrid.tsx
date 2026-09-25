@@ -6,8 +6,9 @@
  * ProductCards (D3 "Reference Grade").
  *
  * - Server pages fetch getCatalog() once and pass plain Product[] down.
- * - `showCategoryFilter` renders the All + 9-category chip row (/catalog);
- *   category pages omit it and pass a pre-filtered list.
+ * - `showCategoryFilter` renders the chip row (/catalog); category pages omit
+ *   it and pass a pre-filtered list. The row is NOT the full taxonomy — it is
+ *   the short list in CHIP_CATEGORIES below.
  * - Category chips match primary OR secondary category (same rule as the
  *   /catalog/[category] routes). Search matches name/SKU, case-insensitive.
  * - Grid: 1-up mobile / 2-up tablet / 3-up desktop with gaps that let the
@@ -32,7 +33,6 @@
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { SearchIcon } from "lucide-react";
-import { CATEGORIES } from "@/content/taxonomy";
 import type { Product } from "@/lib/woo/types";
 import { cn } from "@/lib/utils";
 import { REFERENCE_EASE } from "@/components/motion/InkWipe";
@@ -59,6 +59,22 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "purity-desc", label: "Sort by purity" },
 ];
 
+/**
+ * Which category chips the catalog filter bar offers, and what each is called
+ * HERE. Owner request (2026-09-26): the eight research-category chips came off
+ * the bar, leaving "All" plus a direct route to bacteriostatic water — the one
+ * thing people come to the catalog already knowing they need.
+ *
+ * This list is deliberately NOT `CATEGORIES`. The taxonomy is untouched and
+ * still drives card eyebrows, /catalog/[category] routes and the homepage
+ * category grid; this only controls what the bar puts in front of people.
+ * `label` overrides the taxonomy name for the same reason — the category is
+ * filed as "Laboratory Supplies" but nobody searches for that.
+ */
+const CHIP_CATEGORIES: { slug: string; label: string }[] = [
+  { slug: "lab-supplies", label: "Bac Water" },
+];
+
 /** Does the product belong to the given category (primary or secondary)? */
 function inCategory(p: Product, categorySlug: string): boolean {
   return (
@@ -81,7 +97,7 @@ export function FilterGrid({
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
-    for (const c of CATEGORIES) {
+    for (const c of CHIP_CATEGORIES) {
       map.set(c.slug, products.filter((p) => inCategory(p, c.slug)).length);
     }
     return map;
@@ -160,10 +176,10 @@ export function FilterGrid({
                 active={category === "all"}
                 onClick={() => setCategory("all")}
               />
-              {CATEGORIES.map((c) => (
+              {CHIP_CATEGORIES.map((c) => (
                 <CategoryChip
                   key={c.slug}
-                  label={c.name}
+                  label={c.label}
                   count={counts.get(c.slug) ?? 0}
                   active={category === c.slug}
                   onClick={() => setCategory(c.slug)}

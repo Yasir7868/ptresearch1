@@ -94,7 +94,7 @@ export default async function BulkPage() {
                 </span>
               </p>
               <p className="mt-2 text-[13px] leading-[1.45] text-steel">
-                {tier.perk}
+                {bulkCopy.home.unitsHeading}
               </p>
             </li>
           ))}

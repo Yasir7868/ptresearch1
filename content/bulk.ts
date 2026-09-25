@@ -6,92 +6,86 @@
  * that exist live). Components still read every string from this file.
  *
  * ──────────────────────────────────────────────────────────────────────────
- * OWNER DECISION — the numbers below are the only thing to edit.
+ * THE MODEL — PER PRODUCT, NOT PER ORDER (owner directive 2026-09-25,
+ * from the reference bulk page).
  *
- * `bulkTiers` is the single source of truth for the ladder. The homepage
- * section, the /bulk builder, the cart math (lib/cart.tsx) and the
- * WooCommerce coupon names all read it. Change a threshold or a percentage
- * here and every surface follows — but the matching WooCommerce coupon must
- * be edited to agree, or server totals will differ from what the site quotes
- * (see README "Bulk ordering").
+ * A minimum of `bulkMinUnits` units of ONE product earns that product its
+ * discount. Units are counted across that product's strengths, so 5 x 10mg
+ * plus 5 x 30mg of the same compound is 10 units of it and qualifies; the
+ * buyer mixes strengths freely. Each product earns its own tier
+ * independently — a 50-unit product gets the top tier while a 10-unit product
+ * on the same order gets the first one.
  *
- * OWNER RULE (2026-09-22): promo codes do not apply to bulk orders. Once an
- * order earns a tier, bulk pricing IS the pricing — PT25
- * (brandConfig.promos.coupon) is refused at entry and goes dormant if it was
- * already in the cart. It counts again only if the order drops back below the
- * first rung. lib/cart.tsx enforces this; WooCommerce mirrors it with a
- * maximum-quantity restriction on PT25 (see README "Bulk ordering").
+ * This replaced an order-wide ladder. Order-wide counting let someone reach a
+ * deep discount with one vial of ten different compounds, which is not what
+ * volume pricing is for.
  *
- * That rule makes the ladder's own numbers load-bearing: a buyer at 5 units
- * gives up 25% (PT25) to gain 10% (BULK10), which is a price INCREASE. The
- * first rung should therefore sit at or above the standing coupon while that
- * coupon runs. The defaults below are set accordingly.
+ * OWNER DECISION — the numbers below are the only thing to edit. `bulkTiers`
+ * is the single source of truth: the homepage section, the /bulk builder, the
+ * cart math (lib/totals.ts) and the WooCommerce coupon names all read it.
+ * These percentages come from the reference page, not from this store's
+ * margins — CONFIRM THEM BEFORE LAUNCH.
+ *
+ * Promo codes do not apply to bulk orders (owner rule 2026-09-22): once any
+ * product qualifies, bulk pricing is the pricing and PT25 goes dormant.
+ * Because the first rung is well above PT25's 25%, a bulk buyer is never
+ * worse off for it.
  * ──────────────────────────────────────────────────────────────────────────
  */
 
 import { brandConfig } from "./brand-config";
 
-/** One rung of the bulk ladder. */
+/** One rung of the bulk ladder. Thresholds count units of a SINGLE product. */
 export interface BulkTier {
-  /** Minimum total units in the order to earn this tier. */
+  /** Minimum units of one product (across its strengths) to earn this tier. */
   minUnits: number;
-  /** Percent off the discountable subtotal. */
+  /** Percent off that product's lines. */
   percentOff: number;
   /** The WooCommerce coupon code that carries this tier server-side. */
   code: string;
   /** Ladder label, e.g. "10+ units". */
   label: string;
-  /** One line of what the tier adds beyond the discount. */
-  perk: string;
+  /** Short chip label for the order rail, e.g. "10+ units · 40%". */
+  chip: string;
 }
 
-/**
- * The ladder, ascending. Units = total quantity across every research
- * compound in the order (sizes and compounds mix freely — a 10mg vial and a
- * 60mg vial each count as one unit), which is how WooCommerce's own
- * "minimum quantity" coupon restriction counts.
- */
 export const bulkTiers: BulkTier[] = [
-  // PLACEHOLDER MARGINS — confirm these before launch. The first rung matches
-  // the standing PT25 coupon deliberately: because codes do not apply to bulk
-  // orders, a first rung BELOW 25% would make the 5th vial cost a buyer MORE
-  // than the 4th. Every rung must be >= brandConfig.promos.coupon.percentOff
-  // for as long as that coupon runs.
-  {
-    minUnits: 5,
-    percentOff: 25,
-    code: "BULK25",
-    label: "5+ units",
-    perk: "Automatic at checkout",
-  },
   {
     minUnits: 10,
-    percentOff: 30,
-    code: "BULK30",
+    percentOff: 40,
+    code: "BULK40",
     label: "10+ units",
-    perk: "Free shipping, any order total",
-  },
-  {
-    minUnits: 25,
-    percentOff: 35,
-    code: "BULK35",
-    label: "25+ units",
-    perk: "Priority handling, batch COAs bundled",
+    chip: "10+ units · 40%",
   },
   {
     minUnits: 50,
-    percentOff: 40,
-    code: "BULK40",
+    percentOff: 50,
+    code: "BULK50",
     label: "50+ units",
-    perk: "Named contact, reserved lot on request",
+    chip: "50+ units · 50%",
   },
 ];
 
-/** At or above this many units the site asks for a quote instead of quoting. */
-export const bulkQuoteThreshold = 100;
+/** The per-product minimum — the first rung. Nothing below this discounts. */
+export const bulkMinUnits = bulkTiers[0]!.minUnits;
 
-/** Tiers at or above this rung ship free regardless of order total. */
-export const bulkFreeShippingMinUnits = 10;
+/** At or above this many units in one order the site asks for a quote. */
+export const bulkQuoteThreshold = 250;
+
+/**
+ * Short filter-pill labels, by category slug. The taxonomy's full names
+ * ("Melanocortin & Dermal Research") do not fit a row of pills.
+ */
+export const bulkCategoryLabels: Record<string, string> = {
+  "tissue-regeneration-research": "Tissue Repair",
+  "metabolic-research": "Metabolic",
+  "endocrine-research": "Secretagogue",
+  "neuropeptide-research": "Neuro",
+  "cellular-mitochondrial-research": "Cellular",
+  "melanocortin-dermal-research": "Dermal",
+  "research-blends": "Blends",
+  "lab-supplies": "Supplies",
+};
 
 export const bulkCopy = {
   /** Nav + breadcrumb label. */
@@ -101,16 +95,16 @@ export const bulkCopy = {
   home: {
     eyebrow: "Bulk & wholesale",
     heading: "Order at volume, priced at volume",
-    body: "Laboratories, universities and repeat purchasers pay less per vial as the order grows. Mix any compounds and any sizes — the discount is applied to the whole order automatically at checkout, and every vial still ships with its batch Certificate of Analysis.",
+    body: `Buy ${bulkMinUnits} or more units of any compound and that compound drops to bulk pricing. Strengths count together, so you can mix ${bulkMinUnits}mg and 30mg freely. Every vial still ships with its batch Certificate of Analysis.`,
     cta: "Build a bulk order",
     secondaryCta: "Request a quote",
     ladderHeading: "Volume pricing",
-    unitsHeading: "Order size",
+    unitsHeading: "Units per product",
     discountHeading: "You pay",
     quoteLabel: `${bulkQuoteThreshold}+ units`,
     quoteValue: "Custom quote",
     quotePerk: "Contract pricing, scheduled deliveries",
-    note: "Discounts apply to research compounds. Gift cards are excluded.",
+    note: `Minimums and discounts apply per product, counted across its strengths. Gift cards are excluded.`,
   },
 
   /** /bulk page header. */
@@ -118,56 +112,57 @@ export const bulkCopy = {
     title: "Bulk Orders",
     eyebrow: "Bulk & wholesale",
     heading: "Volume pricing for research programs",
-    body: "Build the order below and the tier is applied as you go. Nothing here is a separate catalog — it is the same stock, the same lots and the same certificates, priced for quantity.",
+    body: `Pick any products, ${bulkMinUnits} units minimum each. The same stock, the same lots and the same certificates — priced for quantity.`,
     metaDescription:
-      "Volume pricing on research compounds from Primetime Research. Mix compounds and sizes, see your tier as you build the order, or request contract pricing.",
+      "Volume pricing on research compounds from Primetime Research. 10 units of any compound unlocks bulk pricing; mix strengths freely.",
   },
 
-  /** The builder. */
+  /** The product grid. */
   builder: {
-    heading: "Build your order",
+    filterAll: "All",
     searchLabel: "Filter compounds",
-    searchPlaceholder: "Filter by name or category…",
-    categoryAll: "All categories",
-    sizeLabel: "Size",
-    qtyLabel: "Quantity",
-    unitPrice: "Unit price",
-    lineTotal: "Line total",
+    searchPlaceholder: "Search compounds…",
     empty: "No compound matches that filter.",
-    noSelection:
-      "Set a quantity on any compound to start. The tier updates as the order grows.",
-    inStock: "In stock",
-    outOfStock: "Out of stock",
     coaChip: "COA",
-    remove: "Clear",
-    clearAll: "Clear order",
-    addAll: "Add order to cart",
-    adding: "Adding…",
-    added: (units: number) =>
-      `${units} ${units === 1 ? "unit" : "units"} added to cart`,
+    outOfStock: "Out of stock",
+    perUnit: "/unit",
+    atDiscount: (percent: number) => `at ${percent}% off`,
+    /** The card's primary action. */
+    addUnits: (units: number) => `Add ${units} units`,
+    added: (name: string, units: number) => `${units} × ${name} added`,
+    /** Shown on a card once it already has units in the order. */
+    inOrder: (units: number) => `${units} in order`,
+    addMore: (units: number) => `Add ${units} more`,
+    remove: "Remove",
   },
 
-  /** The live summary rail. */
-  summary: {
-    heading: "Order summary",
-    units: "Units",
+  /** The sticky order rail. */
+  rail: {
+    heading: "Your bulk order",
+    units: (n: number) => `${n} ${n === 1 ? "unit" : "units"}`,
+    /** Dashed empty state, two lines. */
+    emptyLine1: `Pick any products, ${bulkMinUnits} units minimum each.`,
+    emptyLine2: `${bulkTiers[0]!.percentOff}% off from ${bulkTiers[0]!.minUnits} units, ${bulkTiers[1]!.percentOff}% off from ${bulkTiers[1]!.minUnits}.`,
+    /** Fine print under the tier chips. */
+    finePrint:
+      "Minimums and discounts apply per product, counted across its strengths. Mix strengths freely.",
+    ctaEmpty: `Add ${bulkMinUnits}+ units to start`,
+    cta: "Add order to cart",
+    ctaBusy: "Adding…",
+    clear: "Clear order",
     subtotal: "Subtotal",
-    tier: "Bulk tier",
-    noTier: "None yet",
-    discount: (percent: number) => `Bulk discount (${percent}%)`,
+    discount: "Bulk discount",
+    total: "Estimated total",
     shipping: "Shipping",
     shippingFree: "Free",
     shippingAtCheckout: "Calculated at checkout",
-    total: "Estimated total",
-    perUnit: (price: string) => `${price} per unit`,
-    saved: (amount: string) => `You save ${amount}`,
-    toNextTier: (units: number, percent: number) =>
-      `Add ${units} more ${units === 1 ? "unit" : "units"} for ${percent}% off`,
-    atTop: `Past ${bulkQuoteThreshold} units? Request contract pricing below.`,
-    couponNote: (code: string) =>
-      `Promo codes, including ${code}, do not apply to bulk orders. Bulk pricing replaces them.`,
+    /** A product in the order that has not reached the minimum yet. */
+    belowMinimum: (name: string, needed: number) =>
+      `${name} needs ${needed} more to reach bulk pricing`,
     estimateNote:
-      "An estimate. WooCommerce recalculates tax and shipping at checkout.",
+      "An estimate. Checkout recalculates tax and shipping, and re-prices every line from the live catalog.",
+    couponNote: (code: string) =>
+      `Promo codes, including ${code}, do not apply to bulk orders.`,
   },
 
   /** Why-bulk cards under the builder. */
@@ -177,18 +172,34 @@ export const bulkCopy = {
       body: "Bulk pulls from the stock the catalog sells. Every vial carries its batch Certificate of Analysis with HPLC purity and mass-spec identity.",
     },
     {
-      title: "Mix freely",
-      body: "Units count across the whole order. Ten different compounds at one vial each earns the same tier as ten vials of one compound.",
+      title: "Mix strengths freely",
+      body: `Units count across a compound's strengths. Five 10mg and five 30mg vials are ${bulkMinUnits} units of that compound and earn its bulk price.`,
     },
     {
       title: "Reserved lots",
-      body: "On orders of 50 units or more we can hold a single lot so a study runs start to finish on one batch. Ask when you order.",
+      body: "On large orders we can hold a single lot so a study runs start to finish on one batch. Ask when you order.",
     },
     {
       title: "Terms for institutions",
       body: "Purchase orders, W-9s and scheduled deliveries are available for universities and commercial laboratories. Request them with a quote.",
     },
   ],
+
+  /**
+   * Cart + checkout. Shown wherever a promo code meets a bulk order — the one
+   * place the rule has to be stated in plain words rather than implied by a
+   * number that failed to change.
+   */
+  cart: {
+    /** Rejection when a code is entered on a cart that already earns a tier. */
+    couponBlocked: (code: string, units: number) =>
+      `Coupon "${code}" cannot be applied. This is a bulk order (${units} units at bulk pricing) and bulk pricing is already applied.`,
+    /** Note beside a dormant code the buyer added before going bulk. */
+    couponDormant: (code: string) =>
+      `${code} is not applied — bulk pricing replaces promo codes on this order.`,
+    /** Label on the discount row when bulk pricing is charging. */
+    tierLabel: (units: number) => `${units} units`,
+  },
 
   /** Quote request form. */
   quote: {
@@ -228,33 +239,21 @@ export const bulkCopy = {
     prefillNote: "Prefilled from the order you built above.",
   },
 
-  /**
-   * Cart + checkout. Shown wherever a promo code meets a bulk order — the one
-   * place the rule has to be stated in plain words rather than implied by a
-   * number that failed to change.
-   */
-  cart: {
-    /** Rejection when a code is entered on a cart that already earns a tier. */
-    couponBlocked: (code: string, units: number) =>
-      `Coupon "${code}" cannot be applied. This is a bulk order (${units} units) and bulk pricing is already applied.`,
-    /** Note beside a dormant code the buyer added before going bulk. */
-    couponDormant: (code: string) =>
-      `${code} is not applied — bulk pricing replaces promo codes on this order.`,
-    /** Label on the discount row when a tier is charging. */
-    tierLabel: (units: number) => `${units} units`,
-  },
-
   /** Page FAQ. */
   faq: {
     heading: "Bulk ordering questions",
     items: [
       {
         q: "How is a unit counted?",
-        a: "One vial is one unit, whatever its size. Quantities add up across every research compound in the order, so a mixed order reaches a tier as fast as a single-compound one.",
+        a: `One vial is one unit, whatever its strength. Units are counted per compound across its strengths, so five 10mg and five 30mg vials of the same compound are ${bulkMinUnits} units of it and earn its bulk price.`,
+      },
+      {
+        q: "Do I need 10 of every product?",
+        a: `Yes — the minimum applies per product. A compound below ${bulkMinUnits} units is charged at its normal price; it does not stop the other compounds in the order from earning theirs.`,
       },
       {
         q: "Can I use a promo code on a bulk order?",
-        a: "No. Promo codes do not apply to bulk orders — once the order reaches the first tier, bulk pricing replaces them. Bulk pricing starts at the same discount as our standing code and goes up from there, so a bulk order is never the more expensive route.",
+        a: "No. Promo codes do not apply to bulk orders — once a product reaches the minimum, bulk pricing replaces them. Bulk pricing is far deeper than our standing code, so a bulk order is never the more expensive route.",
       },
       {
         q: "Is bulk stock the same stock?",
@@ -262,15 +261,11 @@ export const bulkCopy = {
       },
       {
         q: "Can I get one lot across the whole order?",
-        a: "On orders of 50 units or more we can usually reserve a single lot so results stay comparable across a study. Note it on the quote request and we will confirm availability.",
+        a: "On large orders we can usually reserve a single lot so results stay comparable across a study. Note it on the quote request and we will confirm availability.",
       },
       {
         q: "Do you accept purchase orders?",
         a: "For universities and commercial laboratories, yes. Request purchase-order terms with a bulk quote and our team will send the paperwork.",
-      },
-      {
-        q: "How fast do bulk orders ship?",
-        a: "Orders are processed within one business day. Large orders that need a reserved lot may take longer, and we confirm the date before charging.",
       },
     ],
   },

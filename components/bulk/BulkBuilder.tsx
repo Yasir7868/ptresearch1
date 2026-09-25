@@ -1,362 +1,445 @@
 "use client";
 
 /**
- * BulkBuilder — the order builder on /bulk.
+ * BulkBuilder — the product grid and order rail on /bulk.
  *
- * A filterable table of every purchasable compound with a quantity stepper
- * per row, and a sticky summary rail that recomputes the earned tier on every
- * keystroke. "Add order to cart" pushes each non-zero row through the normal
- * `useCart().addItem` path, so a bulk order is an ordinary cart — the tier is
- * then re-derived by the cart's own math (lib/cart.tsx), never carried over
- * from here. The two agree because both call lib/bulk.ts.
+ * Built to the reference bulk page the owner supplied (2026-09-25): category
+ * pills, a card per compound with its strengths as selectable rows, a
+ * per-unit bulk price against the struck list price, and one "Add N units"
+ * action. The order rail on the right keeps a running count, the tier chips
+ * and the totals.
  *
- * Variable products (the GLP compounds) pick a size per row; the row's price
- * and its cart line follow that selection, including its `variationId`, so
- * the future WooCommerce adapter has everything it needs.
+ * Structure and behaviour follow the reference; the palette is this site's
+ * (DESIGN.md §0) — navy where the reference uses black — so the page belongs
+ * to the storefront rather than looking borrowed.
  *
- * Money is integer minor units end to end; only `formatMinor` ever produces a
- * string. Every label comes from content/bulk.ts.
+ * THE PRICING RULE, which the whole UI exists to make obvious: a tier is
+ * earned PER PRODUCT, counted across that product's strengths. Ten vials of
+ * one compound qualify however they are split between 10mg and 30mg; one vial
+ * each of ten compounds does not. Cards show the bulk unit price they would
+ * reach, the rail shows what has actually been earned, and a product still
+ * short of the minimum is named rather than silently charged full price.
+ *
+ * All arithmetic comes from lib/bulk.ts, the same module the cart and the
+ * server's order pricing use, so nothing here can quote a discount checkout
+ * will not honour. Money is integer minor units throughout.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import {
+  VIAL_FIELD_RATIO,
+  VIAL_GRID_SIZES,
+  VIAL_ZOOM,
+} from "@/components/plate/vial-crop";
 import type { Product, ProductVariation } from "@/lib/woo/types";
-import { bulkCopy } from "@/content/bulk";
+import { bulkCategoryLabels, bulkCopy, bulkMinUnits } from "@/content/bulk";
 import { brandConfig } from "@/content/brand-config";
 import {
   bulkDiscountMinor,
+  bulkGroups,
+  bulkLadder,
   earnsFreeShipping,
-  needsQuote,
-  nextTier,
   tierForUnits,
   unitsToNextTier,
+  type BulkLine,
 } from "@/lib/bulk";
 import { useCart } from "@/lib/cart";
 import { track } from "@/lib/analytics";
 import { formatMinor } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { CONTAINER, Kicker, SERIF } from "@/components/landing/parts";
+import { CONTAINER } from "@/components/landing/parts";
 
 const copy = bulkCopy.builder;
-const summaryCopy = bulkCopy.summary;
+const rail = bulkCopy.rail;
 
-/** Largest quantity a single row accepts — a guard, not a stock check. */
-const MAX_ROW_QTY = 999;
+/** The first rung — what a card advertises before anything is in the order. */
+const ENTRY_TIER = bulkLadder()[0]!;
 
-/** One buildable line: a product plus, for variable products, a chosen size. */
-interface Row {
-  product: Product;
-  variation: ProductVariation | null;
-  /** Stable key across re-renders and size changes. */
-  key: string;
-  size: string;
+/** What `.plate-zoom` reads (components/plate/vial-crop.ts). */
+const VIAL_FRAME = {
+  "--plate-zoom": VIAL_ZOOM.scale,
+  "--plate-zoom-y": `${VIAL_ZOOM.offsetY}%`,
+} as CSSProperties;
+
+/** One selectable strength of a product. */
+interface Strength {
+  /** Undefined on a simple product, which has no variation to reference. */
+  variationId?: number;
+  label: string;
   priceMinor: number;
+  regularPriceMinor: number;
 }
 
-function rowFor(product: Product, sizeChoice: string | undefined): Row {
+/** A line the buyer has put in the order, keyed by product + strength. */
+interface OrderLine {
+  key: string;
+  product: Product;
+  strength: Strength;
+  qty: number;
+}
+
+function strengthsOf(product: Product): Strength[] {
   const variations = product.variations ?? [];
-  const variation =
-    product.kind === "variable" && variations.length > 0
-      ? (variations.find((v) => v.size === sizeChoice) ?? variations[0])
-      : null;
-  return {
-    product,
-    variation,
-    key: String(product.productId),
-    size: variation?.size ?? product.size ?? "",
-    priceMinor: variation?.priceMinor ?? product.priceMinor,
-  };
+  if (product.kind === "variable" && variations.length > 0) {
+    return variations.map((v: ProductVariation) => ({
+      variationId: v.variationId,
+      label: v.size,
+      priceMinor: v.priceMinor,
+      regularPriceMinor: v.regularPriceMinor,
+    }));
+  }
+  return [
+    {
+      label: product.size ?? "",
+      priceMinor: product.priceMinor,
+      regularPriceMinor: product.regularPriceMinor,
+    },
+  ];
+}
+
+/** The unit price once `percentOff` is applied. Floor, as the cart does. */
+function discountedUnit(priceMinor: number, percentOff: number): number {
+  return priceMinor - Math.floor((priceMinor * percentOff) / 100);
+}
+
+function lineKey(productId: number, strength: Strength): string {
+  return `${productId}__${strength.variationId ?? strength.label}`;
 }
 
 export function BulkBuilder({ products }: { products: Product[] }) {
   const { addItem } = useCart();
 
-  const [filter, setFilter] = useState("");
   const [category, setCategory] = useState("");
-  const [sizes, setSizes] = useState<Record<string, string>>({});
-  const [qty, setQty] = useState<Record<string, number>>({});
+  const [picked, setPicked] = useState<Record<number, string>>({});
+  const [order, setOrder] = useState<Record<string, OrderLine>>({});
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
 
   const categories = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const p of products) seen.set(p.categorySlug, p.categoryName);
-    return [...seen].map(([slug, name]) => ({ slug, name }));
+    for (const p of products) {
+      seen.set(p.categorySlug, bulkCategoryLabels[p.categorySlug] ?? p.categoryName);
+    }
+    return [...seen].map(([slug, label]) => ({ slug, label }));
   }, [products]);
 
-  const rows = useMemo(
-    () => products.map((p) => rowFor(p, sizes[String(p.productId)])),
-    [products, sizes]
+  const visible = useMemo(
+    () => (category ? products.filter((p) => p.categorySlug === category) : products),
+    [products, category]
   );
 
-  const visible = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (category && row.product.categorySlug !== category) return false;
-      if (!needle) return true;
-      return (
-        row.product.displayName.toLowerCase().includes(needle) ||
-        row.product.categoryName.toLowerCase().includes(needle)
-      );
-    });
-  }, [rows, filter, category]);
+  // ── The order, priced ────────────────────────────────────────────────────
+  const lines: OrderLine[] = useMemo(() => Object.values(order), [order]);
 
-  // ── Live order math ──────────────────────────────────────────────────────
-  // Derived from every row with a quantity, not just the visible ones: a
-  // filter must never silently change what the buyer is about to pay for.
-  const order = useMemo(() => {
-    const lines = rows.filter((row) => (qty[row.key] ?? 0) > 0);
-    const units = lines.reduce((sum, row) => sum + (qty[row.key] ?? 0), 0);
+  const summary = useMemo(() => {
+    const bulkLines: BulkLine[] = lines.map((l) => ({
+      productId: l.product.productId,
+      price: l.strength.priceMinor,
+      qty: l.qty,
+    }));
+
     const subtotal = lines.reduce(
-      (sum, row) => sum + row.priceMinor * (qty[row.key] ?? 0),
+      (sum, l) => sum + l.strength.priceMinor * l.qty,
       0
     );
-    const discount = bulkDiscountMinor(subtotal, units);
-    return {
-      lines,
-      units,
-      subtotal,
-      discount,
-      tier: tierForUnits(units),
-      total: subtotal - discount,
-      freeShipping:
-        earnsFreeShipping(units) ||
-        subtotal - discount >= brandConfig.promos.freeShipping.thresholdMinor,
-    };
-  }, [rows, qty]);
+    const discount = bulkDiscountMinor(bulkLines);
+    const groups = bulkGroups(bulkLines);
+    const units = lines.reduce((sum, l) => sum + l.qty, 0);
+    const freeShipping =
+      earnsFreeShipping(bulkLines) ||
+      subtotal - discount >= brandConfig.promos.freeShipping.thresholdMinor;
 
-  const setRowQty = (key: string, value: number) =>
-    setQty((prev) => {
+    return { bulkLines, subtotal, discount, groups, units, freeShipping };
+  }, [lines]);
+
+  /** Units already in the order for one product, across its strengths. */
+  const unitsForProduct = (productId: number): number =>
+    lines.reduce(
+      (sum, l) => (l.product.productId === productId ? sum + l.qty : sum),
+      0
+    );
+
+  const addUnits = (product: Product, strength: Strength, qty: number) => {
+    const key = lineKey(product.productId, strength);
+    setOrder((prev) => {
+      const existing = prev[key];
+      return {
+        ...prev,
+        [key]: existing
+          ? { ...existing, qty: existing.qty + qty }
+          : { key, product, strength, qty },
+      };
+    });
+    setStatus(copy.added(product.displayName, qty));
+  };
+
+  const removeProductLine = (key: string) =>
+    setOrder((prev) => {
       const next = { ...prev };
-      const clamped = Math.min(MAX_ROW_QTY, Math.max(0, Math.trunc(value)));
-      if (clamped === 0) delete next[key];
-      else next[key] = clamped;
+      delete next[key];
       return next;
     });
 
   const handleAddAll = async () => {
-    if (order.lines.length === 0 || busy) return;
+    if (lines.length === 0 || busy) return;
     setBusy(true);
-    setStatus("");
     try {
-      for (const row of order.lines) {
-        const count = qty[row.key] ?? 0;
+      for (const line of lines) {
         await addItem({
-          sku: row.product.sku,
-          dose: row.size,
-          name: row.product.displayName,
-          price: row.priceMinor,
-          productId: row.product.productId,
-          variationId: row.variation?.variationId,
-          variation: row.variation
-            ? [{ attribute: "Size", value: row.variation.size }]
-            : undefined,
-          image: row.product.images[0]?.src,
-          qty: count,
+          sku: line.product.sku,
+          dose: line.strength.label,
+          name: line.product.displayName,
+          price: line.strength.priceMinor,
+          productId: line.product.productId,
+          ...(line.strength.variationId !== undefined
+            ? { variationId: line.strength.variationId }
+            : {}),
+          ...(line.strength.variationId !== undefined
+            ? { variation: [{ attribute: "Size", value: line.strength.label }] }
+            : {}),
+          image: line.product.images[0]?.src,
+          qty: line.qty,
         });
         track("add_to_cart", {
-          sku: row.product.sku,
-          dose: row.size,
-          qty: count,
-          price_cents: row.priceMinor,
+          sku: line.product.sku,
+          dose: line.strength.label,
+          qty: line.qty,
+          price_cents: line.strength.priceMinor,
         });
       }
-      setStatus(copy.added(order.units));
-      setQty({});
+      setStatus(rail.units(summary.units) + " added to cart");
+      setOrder({});
     } finally {
       setBusy(false);
     }
   };
 
-  const toNext = unitsToNextTier(order.units);
-  const upcoming = nextTier(order.units);
+  /** Products in the order that have not reached the per-product minimum. */
+  const shortfalls = summary.groups
+    .filter((g) => g.tier === null)
+    .map((g) => {
+      const product = lines.find((l) => l.product.productId === g.productId)?.product;
+      return {
+        name: product?.displayName ?? "",
+        needed: bulkMinUnits - g.units,
+      };
+    })
+    .filter((s) => s.name && s.needed > 0);
+
+  const anyQualifies = summary.groups.some((g) => g.tier !== null);
 
   return (
-    <section className={cn(CONTAINER, "py-14")}>
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
-        {/* ── The table ─────────────────────────────────────────────────── */}
+    <section className={cn(CONTAINER, "py-10")}>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px] lg:items-start">
         <div>
-          <Kicker>{bulkCopy.page.eyebrow}</Kicker>
-          <h2
-            className={cn(
-              SERIF,
-              "mt-1.5 mb-5 text-[clamp(24px,3vw,32px)] tracking-[-0.01em] text-navy-ink"
-            )}
-          >
-            {copy.heading}
-          </h2>
-
-          <div className="mb-4 flex flex-wrap gap-3">
-            <label className="flex-1 basis-[240px]">
-              <span className="sr-only">{copy.searchLabel}</span>
-              <input
-                type="search"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder={copy.searchPlaceholder}
-                className="h-[46px] w-full rounded-lg border border-rule bg-white px-4 text-[15px] text-navy-ink placeholder:text-steel focus-visible:border-cobalt focus-visible:ring-2 focus-visible:ring-cobalt/30 focus-visible:outline-none"
+          {/* ── Category pills ─────────────────────────────────────────── */}
+          <nav aria-label={copy.searchLabel} className="mb-6 flex flex-wrap gap-2.5">
+            <FilterPill
+              active={category === ""}
+              onClick={() => setCategory("")}
+              label={copy.filterAll}
+            />
+            {categories.map((c) => (
+              <FilterPill
+                key={c.slug}
+                active={category === c.slug}
+                onClick={() => setCategory(c.slug)}
+                label={c.label}
               />
-            </label>
-            <label>
-              <span className="sr-only">{copy.categoryAll}</span>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="h-[46px] rounded-lg border border-rule bg-white px-3 text-[15px] text-navy-ink focus-visible:border-cobalt focus-visible:ring-2 focus-visible:ring-cobalt/30 focus-visible:outline-none"
-              >
-                <option value="">{copy.categoryAll}</option>
-                {categories.map((c) => (
-                  <option key={c.slug} value={c.slug}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+            ))}
+          </nav>
 
-          <div className="overflow-hidden rounded-[14px] border border-rule bg-white">
-            {visible.length === 0 ? (
-              <p className="px-5 py-10 text-center text-[15px] text-steel">
-                {copy.empty}
-              </p>
-            ) : (
-              <ul className="divide-y divide-rule">
-                {visible.map((row) => (
-                  <BuilderRow
-                    key={row.key}
-                    row={row}
-                    qty={qty[row.key] ?? 0}
-                    onQty={(value) => setRowQty(row.key, value)}
-                    onSize={(size) =>
-                      setSizes((prev) => ({
-                        ...prev,
-                        [String(row.product.productId)]: size,
-                      }))
+          {/* ── Product grid ───────────────────────────────────────────── */}
+          {visible.length === 0 ? (
+            <p className="rounded-[14px] border border-rule bg-white px-5 py-10 text-center text-[15px] text-steel">
+              {copy.empty}
+            </p>
+          ) : (
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(260px,100%),1fr))] gap-5">
+              {visible.map((product) => (
+                <li key={product.productId}>
+                  <BulkCard
+                    product={product}
+                    pickedLabel={picked[product.productId]}
+                    onPick={(label) =>
+                      setPicked((p) => ({ ...p, [product.productId]: label }))
                     }
+                    inOrder={unitsForProduct(product.productId)}
+                    onAdd={(strength) => addUnits(product, strength, bulkMinUnits)}
                   />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* ── Order rail ───────────────────────────────────────────────── */}
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <div className="rounded-[18px] border border-rule bg-white p-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-[18px] font-extrabold text-navy-ink">
+                {rail.heading}
+              </h2>
+              <span className="text-[14px] text-steel tabular-nums">
+                {rail.units(summary.units)}
+              </span>
+            </div>
+
+            {lines.length === 0 ? (
+              <div className="mt-4 rounded-[14px] border border-dashed border-rule px-5 py-7 text-center">
+                <p className="text-[14px] leading-[1.6] text-steel-ink">
+                  {rail.emptyLine1}
+                </p>
+                <p className="text-[14px] leading-[1.6] text-steel-ink">
+                  {rail.emptyLine2}
+                </p>
+              </div>
+            ) : (
+              <ul className="mt-4 divide-y divide-rule border-y border-rule">
+                {lines.map((line) => {
+                  const group = summary.groups.find(
+                    (g) => g.productId === line.product.productId
+                  );
+                  const tier = group?.tier ?? null;
+                  const unit = tier
+                    ? discountedUnit(line.strength.priceMinor, tier.percentOff)
+                    : line.strength.priceMinor;
+                  return (
+                    <li key={line.key} className="flex gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-bold text-navy-ink">
+                          {line.product.displayName}
+                        </p>
+                        <p className="text-[13px] text-steel tabular-nums">
+                          {line.strength.label} · {line.qty} ×{" "}
+                          {formatMinor(unit)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[14px] font-bold text-navy-ink tabular-nums">
+                          {formatMinor(unit * line.qty)}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => removeProductLine(line.key)}
+                          className="cursor-pointer text-[12px] text-steel underline-offset-2 hover:text-navy hover:underline"
+                        >
+                          {copy.remove}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {/* Tier chips — the offer, always visible. */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {bulkLadder().map((tier, index) => {
+                const earned = summary.groups.some(
+                  (g) => g.tier && g.tier.minUnits >= tier.minUnits
+                );
+                return (
+                  <span
+                    key={tier.code}
+                    className={cn(
+                      "rounded-full px-3.5 py-2 text-[13px] font-bold tabular-nums",
+                      index === 0
+                        ? "bg-navy text-white"
+                        : "bg-ok/12 text-ok",
+                      earned && "ring-2 ring-cobalt ring-offset-1"
+                    )}
+                  >
+                    {tier.chip}
+                  </span>
+                );
+              })}
+            </div>
+
+            <p className="mt-3 text-[12px] leading-[1.5] text-steel">
+              {rail.finePrint}
+            </p>
+
+            {/* Anything in the order still short of its own minimum. */}
+            {shortfalls.length > 0 && (
+              <ul className="mt-3 flex flex-col gap-1.5">
+                {shortfalls.map((s) => (
+                  <li
+                    key={s.name}
+                    className="rounded-lg bg-mist px-3 py-2 text-[12px] leading-[1.45] font-semibold text-navy"
+                  >
+                    {rail.belowMinimum(s.name, s.needed)}
+                  </li>
                 ))}
               </ul>
             )}
-          </div>
-        </div>
 
-        {/* ── The summary rail ──────────────────────────────────────────── */}
-        <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-[14px] border border-rule bg-white p-5">
-            <h3 className="mb-4 text-[13px] font-extrabold tracking-[0.08em] text-navy uppercase">
-              {summaryCopy.heading}
-            </h3>
-
-            {order.units === 0 ? (
-              <p className="text-[14px] leading-[1.55] text-steel">
-                {copy.noSelection}
-              </p>
-            ) : (
-              <dl className="space-y-2.5 text-[15px]">
-                <Line label={summaryCopy.units} value={String(order.units)} />
-                <Line
-                  label={summaryCopy.subtotal}
-                  value={formatMinor(order.subtotal)}
-                />
-                <Line
-                  label={summaryCopy.tier}
-                  value={
-                    order.tier
-                      ? `${order.tier.label} · ${order.tier.percentOff}%`
-                      : summaryCopy.noTier
-                  }
-                />
-                {order.discount > 0 && order.tier ? (
-                  <Line
-                    label={summaryCopy.discount(order.tier.percentOff)}
-                    value={`−${formatMinor(order.discount)}`}
+            {lines.length > 0 && (
+              <dl className="mt-4 space-y-2 border-t border-rule pt-4 text-[14px]">
+                <Row label={rail.subtotal} value={formatMinor(summary.subtotal)} />
+                {summary.discount > 0 && (
+                  <Row
+                    label={rail.discount}
+                    value={`−${formatMinor(summary.discount)}`}
                     accent
                   />
-                ) : null}
-                <Line
-                  label={summaryCopy.shipping}
+                )}
+                <Row
+                  label={rail.shipping}
                   value={
-                    order.freeShipping
-                      ? summaryCopy.shippingFree
-                      : summaryCopy.shippingAtCheckout
+                    summary.freeShipping
+                      ? rail.shippingFree
+                      : rail.shippingAtCheckout
                   }
                 />
-                <div className="mt-3 flex items-baseline justify-between border-t border-rule pt-3">
-                  <dt className="text-[15px] font-extrabold text-navy-ink">
-                    {summaryCopy.total}
-                  </dt>
-                  <dd className="text-[22px] font-extrabold text-navy-ink tabular-nums">
-                    {formatMinor(order.total)}
+                <div className="flex items-baseline justify-between border-t border-rule pt-2.5">
+                  <dt className="font-extrabold text-navy-ink">{rail.total}</dt>
+                  <dd className="text-[20px] font-extrabold text-navy-ink tabular-nums">
+                    {formatMinor(summary.subtotal - summary.discount)}
                   </dd>
                 </div>
-                <p className="text-right text-[13px] text-steel tabular-nums">
-                  {summaryCopy.perUnit(
-                    formatMinor(Math.round(order.total / order.units))
-                  )}
-                </p>
               </dl>
             )}
-
-            {/* Progress toward the next rung — the reason to add one more. */}
-            {order.units > 0 && toNext !== null && upcoming ? (
-              <p className="mt-4 rounded-lg bg-mist px-3.5 py-2.5 text-[13px] font-semibold text-navy">
-                {summaryCopy.toNextTier(toNext, upcoming.percentOff)}
-              </p>
-            ) : null}
-
-            {needsQuote(order.units) ? (
-              <p className="mt-4 rounded-lg bg-mist px-3.5 py-2.5 text-[13px] font-semibold text-navy">
-                <Link href="#quote" className="text-cobalt hover:underline">
-                  {summaryCopy.atTop}
-                </Link>
-              </p>
-            ) : null}
 
             <button
               type="button"
               onClick={() => void handleAddAll()}
-              disabled={order.units === 0 || busy}
-              className="mt-5 h-[50px] w-full cursor-pointer rounded-lg bg-cobalt text-[15px] font-bold text-white transition-colors hover:bg-cobalt-bright disabled:cursor-not-allowed disabled:bg-rule disabled:text-steel"
+              disabled={!anyQualifies || busy}
+              className="mt-5 h-[52px] w-full cursor-pointer rounded-[12px] bg-navy text-[15px] font-bold text-white transition-colors hover:bg-navy-ink disabled:cursor-not-allowed disabled:bg-rule disabled:text-steel"
             >
-              {busy ? copy.adding : copy.addAll}
+              {busy ? rail.ctaBusy : anyQualifies ? rail.cta : rail.ctaEmpty}
             </button>
 
-            {order.units > 0 ? (
+            {lines.length > 0 && (
               <button
                 type="button"
-                onClick={() => setQty({})}
-                className="mt-2 h-[38px] w-full cursor-pointer rounded-lg text-[14px] font-semibold text-steel transition-colors hover:text-navy"
+                onClick={() => setOrder({})}
+                className="mt-2 h-[36px] w-full cursor-pointer text-[13px] font-semibold text-steel transition-colors hover:text-navy"
               >
-                {copy.clearAll}
+                {rail.clear}
               </button>
-            ) : null}
+            )}
 
             <p className="mt-4 text-[12px] leading-[1.5] text-steel">
-              {summaryCopy.estimateNote}
+              {rail.estimateNote}
             </p>
             <p className="mt-2 text-[12px] leading-[1.5] text-steel">
-              {summaryCopy.couponNote(brandConfig.promos.coupon.code)}
+              {rail.couponNote(brandConfig.promos.coupon.code)}
             </p>
           </div>
 
           <p role="status" aria-live="polite" className="sr-only">
             {status}
           </p>
-          {status ? (
-            <p className="mt-3 rounded-lg border border-ok/30 bg-ok/10 px-3.5 py-2.5 text-[14px] font-semibold text-ok">
-              {status}
-            </p>
-          ) : null}
         </aside>
       </div>
-
-      <p className="mt-6 text-[13px] text-steel">{bulkCopy.home.note}</p>
     </section>
   );
 }
 
-function Line({
+function Row({
   label,
   value,
   accent,
@@ -380,128 +463,196 @@ function Line({
   );
 }
 
-function BuilderRow({
-  row,
-  qty,
-  onQty,
-  onSize,
+function FilterPill({
+  active,
+  onClick,
+  label,
 }: {
-  row: Row;
-  qty: number;
-  onQty: (value: number) => void;
-  onSize: (size: string) => void;
+  active: boolean;
+  onClick: () => void;
+  label: string;
 }) {
-  const { product } = row;
-  const image = product.images[0];
-  const variations = product.variations ?? [];
-  const unavailable = !product.isInStock || !product.isPurchasable;
-  const qtyId = `bulk-qty-${row.key}`;
-
   return (
-    <li
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
       className={cn(
-        "flex flex-wrap items-center gap-4 px-4 py-3.5",
-        qty > 0 && "bg-frost"
+        "cursor-pointer rounded-full border px-4.5 py-2 text-[14px] font-semibold transition-colors",
+        active
+          ? "border-navy-ink bg-navy-ink text-white"
+          : "border-rule bg-white text-navy-ink hover:border-navy"
       )}
     >
-      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-frost">
+      {label}
+    </button>
+  );
+}
+
+function BulkCard({
+  product,
+  pickedLabel,
+  onPick,
+  inOrder,
+  onAdd,
+}: {
+  product: Product;
+  pickedLabel: string | undefined;
+  onPick: (label: string) => void;
+  inOrder: number;
+  onAdd: (strength: Strength) => void;
+}) {
+  const strengths = strengthsOf(product);
+  const selected =
+    strengths.find((s) => s.label === pickedLabel) ?? strengths[0]!;
+  const image = product.images[0];
+  const unavailable = !product.isInStock || !product.isPurchasable;
+
+  // What this card advertises: the price at the entry rung. The rail and the
+  // cart recompute from the real order, so this is a quote, not the charge.
+  const bulkUnit = discountedUnit(selected.priceMinor, ENTRY_TIER.percentOff);
+  const nextUnits = inOrder > 0 ? unitsToNextTier(inOrder) : null;
+  const earned = tierForUnits(inOrder);
+
+  return (
+    <article className="flex h-full flex-col overflow-hidden rounded-[18px] border border-rule bg-white">
+      {/*
+        The vial, framed rather than fitted. Every studio shot is a 2:3 frame
+        that is roughly three quarters empty sweep, so a plain `object-contain`
+        renders the specimen at about a fifth of the card width. `.plate-zoom`
+        scales a measured crop window to fill the field instead — the same
+        treatment the catalog plates use, from one documented source
+        (components/plate/vial-crop.ts). The field is portrait because
+        `object-contain` sizes by height: a taller field renders the vial WIDER.
+      */}
+      <div
+        // overflow-hidden is load-bearing: the zoom scales the image past the
+        // field, and without clipping here it would run over the card's text.
+        className="relative overflow-hidden bg-frost"
+        style={{ aspectRatio: VIAL_FIELD_RATIO }}
+      >
         {image ? (
           <Image
             src={image.src}
-            alt=""
+            alt={image.alt || product.displayName}
             fill
-            sizes="56px"
-            className={cn("object-cover", unavailable && "opacity-45")}
+            sizes={VIAL_GRID_SIZES}
+            className={cn("plate-zoom object-contain", unavailable && "opacity-45")}
+            style={VIAL_FRAME}
           />
+        ) : null}
+
+        {/* Purity + COA, as the reference shows it: a chip on the image. */}
+        {product.purity && product.coaUrl ? (
+          <Link
+            href={product.coaUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-rule bg-white px-2.5 py-1.5 text-[12px] font-bold text-navy-ink shadow-[0_1px_3px_rgba(11,27,51,.08)] hover:border-cobalt"
+          >
+            <span aria-hidden="true" className="text-ok">
+              ✓
+            </span>
+            {product.purity}
+            <span className="underline underline-offset-2">{copy.coaChip}</span>
+            <span aria-hidden="true" className="text-steel">
+              ›
+            </span>
+          </Link>
         ) : null}
       </div>
 
-      <div className="min-w-[180px] flex-1">
-        <Link
-          href={`/product/${product.slug}`}
-          className="text-[15px] font-extrabold text-navy-ink hover:text-cobalt"
-        >
-          {product.displayName}
-        </Link>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[13px] text-steel">
-          <span>{product.categoryName}</span>
-          {product.coaUrl ? (
-            <span className="rounded-xs border border-rule bg-white px-1.5 py-px text-[11px] font-bold text-navy">
-              {copy.coaChip} <span aria-hidden="true">✓</span>
-            </span>
-          ) : null}
-          <span className={unavailable ? "text-steel" : "text-ok font-bold"}>
-            {unavailable ? copy.outOfStock : copy.inStock}
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div>
+          <h3 className="text-[16px] leading-tight font-extrabold text-navy-ink">
+            <Link href={`/product/${product.slug}`} className="text-navy-ink hover:text-cobalt">
+              {product.displayName}
+            </Link>
+          </h3>
+          <p className="mt-0.5 text-[13px] text-steel">
+            {bulkCategoryLabels[product.categorySlug] ?? product.categoryName}
+          </p>
+        </div>
+
+        {/* Strength rows — the selected one is filled, as in the reference. */}
+        <ul className="flex flex-col gap-2">
+          {strengths.map((s) => {
+            const active = s.label === selected.label;
+            return (
+              <li key={s.variationId ?? s.label}>
+                <button
+                  type="button"
+                  onClick={() => onPick(s.label)}
+                  aria-pressed={active}
+                  disabled={unavailable}
+                  className={cn(
+                    "flex w-full cursor-pointer items-center justify-between gap-3 rounded-[10px] border px-3.5 py-2.5 text-[14px] font-bold transition-colors disabled:cursor-not-allowed",
+                    active
+                      ? "border-navy-ink bg-navy-ink text-white"
+                      : "border-rule bg-white text-navy-ink hover:border-navy"
+                  )}
+                >
+                  <span>{s.label}</span>
+                  <span
+                    className={cn(
+                      "tabular-nums",
+                      active ? "text-white" : "text-steel"
+                    )}
+                  >
+                    {formatMinor(
+                      discountedUnit(s.priceMinor, ENTRY_TIER.percentOff)
+                    )}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* Price line: bulk unit price, list price struck, the discount named. */}
+        <p className="mt-auto flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="text-[20px] font-extrabold text-navy-ink tabular-nums">
+            {formatMinor(bulkUnit)}
+          </span>
+          <span className="text-[13px] text-steel">{copy.perUnit}</span>
+          <s className="text-[13px] text-steel tabular-nums">
+            {formatMinor(selected.regularPriceMinor || selected.priceMinor)}
+          </s>
+          <span className="text-[13px] text-steel">
+            {copy.atDiscount(ENTRY_TIER.percentOff)}
           </span>
         </p>
-      </div>
 
-      {variations.length > 0 ? (
-        <label className="shrink-0">
-          <span className="sr-only">
-            {copy.sizeLabel} — {product.displayName}
-          </span>
-          <select
-            value={row.size}
-            onChange={(e) => onSize(e.target.value)}
-            className="h-[40px] rounded-lg border border-rule bg-white px-2.5 text-[14px] text-navy-ink focus-visible:border-cobalt focus-visible:ring-2 focus-visible:ring-cobalt/30 focus-visible:outline-none"
+        {unavailable ? (
+          <button
+            type="button"
+            disabled
+            className="h-[46px] rounded-[10px] bg-rule text-[15px] font-bold text-steel"
           >
-            {variations.map((v) => (
-              <option key={v.variationId} value={v.size}>
-                {v.size}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : row.size ? (
-        <span className="w-[64px] shrink-0 text-[14px] text-steel tabular-nums">
-          {row.size}
-        </span>
-      ) : null}
+            {copy.outOfStock}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onAdd(selected)}
+            className="flex h-[46px] cursor-pointer items-center justify-center gap-2 rounded-[10px] bg-navy-ink text-[15px] font-bold text-white transition-colors hover:bg-navy"
+          >
+            <span aria-hidden="true">+</span>
+            {inOrder > 0 ? copy.addMore(bulkMinUnits) : copy.addUnits(bulkMinUnits)}
+            <span className="sr-only"> — {product.displayName} {selected.label}</span>
+          </button>
+        )}
 
-      <span className="w-[86px] shrink-0 text-right text-[15px] font-semibold text-navy-ink tabular-nums">
-        {formatMinor(row.priceMinor)}
-      </span>
-
-      <div className="flex shrink-0 items-center gap-1.5">
-        <label htmlFor={qtyId} className="sr-only">
-          {copy.qtyLabel} — {product.displayName}
-        </label>
-        <button
-          type="button"
-          onClick={() => onQty(qty - 1)}
-          disabled={qty === 0 || unavailable}
-          aria-label={`−1 ${product.displayName}`}
-          className="h-[40px] w-[36px] cursor-pointer rounded-lg border border-rule text-[18px] leading-none font-bold text-navy transition-colors hover:border-cobalt hover:text-cobalt disabled:cursor-not-allowed disabled:text-steel disabled:hover:border-rule"
-        >
-          −
-        </button>
-        <input
-          id={qtyId}
-          type="number"
-          inputMode="numeric"
-          min={0}
-          max={MAX_ROW_QTY}
-          value={qty === 0 ? "" : qty}
-          placeholder="0"
-          disabled={unavailable}
-          onChange={(e) => onQty(Number(e.target.value))}
-          className="h-[40px] w-[62px] rounded-lg border border-rule bg-white text-center text-[15px] font-semibold text-navy-ink tabular-nums focus-visible:border-cobalt focus-visible:ring-2 focus-visible:ring-cobalt/30 focus-visible:outline-none disabled:bg-mist"
-        />
-        <button
-          type="button"
-          onClick={() => onQty(qty + 1)}
-          disabled={unavailable}
-          aria-label={`+1 ${product.displayName}`}
-          className="h-[40px] w-[36px] cursor-pointer rounded-lg border border-rule text-[18px] leading-none font-bold text-navy transition-colors hover:border-cobalt hover:text-cobalt disabled:cursor-not-allowed disabled:text-steel disabled:hover:border-rule"
-        >
-          +
-        </button>
+        {inOrder > 0 ? (
+          <p className="text-center text-[12px] font-semibold text-steel tabular-nums">
+            {copy.inOrder(inOrder)}
+            {earned ? ` · ${earned.percentOff}% off` : null}
+            {!earned && nextUnits !== null
+              ? ` · ${nextUnits} more for ${ENTRY_TIER.percentOff}%`
+              : null}
+          </p>
+        ) : null}
       </div>
-
-      <span className="w-[92px] shrink-0 text-right text-[15px] font-extrabold text-navy-ink tabular-nums">
-        {qty > 0 ? formatMinor(row.priceMinor * qty) : "—"}
-      </span>
-    </li>
+    </article>
   );
 }

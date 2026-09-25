@@ -26,10 +26,20 @@
  */
 
 import { brandConfig } from "@/content/brand-config";
-import { bulkDiscountMinor, earnsFreeShipping, tierForUnits } from "@/lib/bulk";
+import {
+  bestTier,
+  bulkDiscountMinor,
+  earnsFreeShipping,
+  qualifyingUnits,
+} from "@/lib/bulk";
 
-/** The subset of a cart line that pricing depends on. */
+/**
+ * The subset of a cart line that pricing depends on. `productId` matters:
+ * bulk tiers are earned PER PRODUCT across its strengths, so lines that share
+ * one are counted together (lib/bulk.ts).
+ */
 export interface PricedLine {
+  productId?: number | undefined;
   price: number;
   qty: number;
   excludedFromCoupons?: boolean | undefined;
@@ -75,23 +85,20 @@ export function computeTotals(
     (sum, i) => (i.excludedFromCoupons ? sum : sum + i.price * i.qty),
     0
   );
-  // Units the bulk ladder counts — same lines that fund the discount.
-  const bulkUnits = items.reduce(
-    (sum, i) => (i.excludedFromCoupons ? sum : sum + i.qty),
-    0
-  );
+  // Bulk tiers are earned per product across its strengths, so the ladder is
+  // applied to grouped lines rather than to the order as a whole.
+  const bulkDiscount = bulkDiscountMinor(items);
+  const earnedTier = bestTier(items);
+  // Units that actually earned a tier — not every unit in the cart.
+  const bulkUnits = qualifyingUnits(items);
 
   // Bulk pricing, once earned, replaces promo codes outright.
-  const earnedTier = tierForUnits(bulkUnits);
-
   const couponPct = appliedCoupons.includes(brandConfig.promos.coupon.code)
     ? brandConfig.promos.coupon.percentOff
     : 0;
   const couponDiscount = Math.floor((discountable * couponPct) / 100);
 
-  const discount = earnedTier
-    ? bulkDiscountMinor(discountable, bulkUnits)
-    : couponDiscount;
+  const discount = earnedTier ? bulkDiscount : couponDiscount;
 
   // Codes that are in the cart but earning nothing because bulk is in force.
   const blockedCoupons = earnedTier ? appliedCoupons : [];
@@ -101,7 +108,7 @@ export function computeTotals(
   const shipping: number | null =
     items.length > 0 &&
     (merchandise >= brandConfig.promos.freeShipping.thresholdMinor ||
-      earnsFreeShipping(bulkUnits))
+      earnsFreeShipping(items))
       ? 0
       : null;
 
