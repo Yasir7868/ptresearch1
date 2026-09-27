@@ -84,9 +84,9 @@ export const VIAL_ZOOM = {
 } as const;
 
 /**
- * `sizes` for a vial in a 3-up grid. Deliberately wider than the card: the
- * zoom renders the image box larger than the plate it is cropped to, and
- * asking for the card width alone would fetch a source that upscales.
+ * `sizes` for a vial in a 3-up grid (2-up below 1024px, phones included).
+ * Deliberately wider than the card: the zoom renders the image box larger
+ * than the plate it is cropped to, and asking for the card width alone would
+ * fetch a source that upscales.
  */
-export const VIAL_GRID_SIZES =
-  "(min-width: 1024px) 520px, (min-width: 640px) 58vw, 115vw";
+export const VIAL_GRID_SIZES = "(min-width: 1024px) 520px, 58vw";

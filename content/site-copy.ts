@@ -249,16 +249,14 @@ export const redesignHome = {
     'Orders processed within one business day',
     'Encrypted checkout · Credit cards accepted',
   ],
-  categories: {
-    eyebrow: 'Catalog',
-    heading: 'Find your compound fast',
-    browseAll: 'Browse all products',
-    count: (n: number) => `${n} ${n === 1 ? 'compound' : 'compounds'}`,
-  },
+  // The category grid this label belonged to was dropped on 2026-09-24 (the
+  // marquee took its slot); the label moved to the best-sellers heading, which
+  // is now the homepage's route into the catalog.
   bestSellers: {
     eyebrow: 'Best sellers',
     heading: 'Most ordered this month',
     note: 'All prices include batch COA',
+    browseAll: 'Browse all products',
     addToCart: 'Add to cart',
     selectSize: 'Select size',
     inStock: 'In stock',

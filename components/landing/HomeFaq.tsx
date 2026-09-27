@@ -17,7 +17,7 @@ export function HomeFaq() {
   const baseId = useId();
 
   return (
-    <section id="faq" className="scroll-mt-[69px] border-t border-rule bg-white">
+    <section id="faq" className="scroll-mt-[57px] md:scroll-mt-[69px] border-t border-rule bg-white">
       <div className="mx-auto max-w-[860px] px-6 py-16">
         <Kicker>{homepageFaq.eyebrow}</Kicker>
         <h2

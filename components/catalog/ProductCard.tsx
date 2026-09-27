@@ -5,7 +5,7 @@
  *
  * A thin wrapper around the system SpecimenPlate component (DESIGN §4): the
  * vial on --surface, a hairline rule, then the typeset record —
- * category micro-label + SKU, compound name in semibold Satoshi, and a Satoshi
+ * SKU micro-label, compound name in semibold Satoshi, and a Satoshi
  * tabular data line (purity · sizes), with the price line and a buy control
  * beneath it.
  *
@@ -154,17 +154,20 @@ export function ProductCard({ product }: { product: Product }) {
           <SalePill percentOff={percentOff} />
         ) : undefined
       }
+      // No category name on grid cards (owner request 2026-09-27) — SKU only.
       eyebrow={
-        <span className="flex min-w-0 items-baseline justify-between gap-3">
-          {/* truncate (not wrap): two-line micro-labels break the row rhythm */}
-          <span className="min-w-0 truncate">{product.categoryName}</span>
-          {product.sku && (
-            <span className="hidden shrink-0 sm:inline">{product.sku}</span>
-          )}
-        </span>
+        product.sku ? (
+          <span className="block truncate">{product.sku}</span>
+        ) : undefined
       }
       title={
-        <span className={cn(outOfStock && "text-ink-muted")}>
+        // The grid is two-up on phones, so the name steps down to fit.
+        <span
+          className={cn(
+            "block max-sm:text-[1rem] max-sm:leading-snug",
+            outOfStock && "text-ink-muted"
+          )}
+        >
           {product.displayName}
         </span>
       }

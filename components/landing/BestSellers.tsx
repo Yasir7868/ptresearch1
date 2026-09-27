@@ -2,8 +2,9 @@
 
 /**
  * BestSellers — "Most ordered this month": 4-up product cards on the mist
- * ground. Each card: the vial on a frost field (corner badge + COA chip), a
- * "category · size" line, the name and a one-line descriptor, price with the
+ * ground (two-up on phones). Each card: the vial on a frost field (corner
+ * badge + COA chip), a size line (no category name — owner request
+ * 2026-09-27), the name and a one-line descriptor, price with the
  * struck list price, stock, and Add to cart (Select size for variable
  * products, which links to the PDP). Adding shows the design's bottom toast.
  *
@@ -27,7 +28,7 @@ import { useCart } from "@/lib/cart";
 import { track } from "@/lib/analytics";
 import { formatMinor, priceLine } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { CONTAINER, Kicker, SERIF } from "./parts";
+import { Arrow, CONTAINER, Kicker, SERIF } from "./parts";
 
 const copy = redesignHome.bestSellers;
 
@@ -121,7 +122,7 @@ function BestSellerCard({
 
   return (
     <article className="relative flex h-full flex-col overflow-hidden rounded-xl border border-rule bg-white transition-[border-color,box-shadow] duration-200 hover:border-cobalt hover:shadow-[0_10px_30px_rgba(11,27,51,.08)] has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-cobalt">
-      <div className="relative bg-frost p-[18px]">
+      <div className="relative bg-frost p-2.5 sm:p-[18px]">
         <div className="relative aspect-[360/590] overflow-hidden bg-white">
           {image ? (
             <Image
@@ -129,7 +130,7 @@ function BestSellerCard({
               alt={image.alt || title}
               fill
               // The frame scales the photograph ~1.9x the box width.
-              sizes="(min-width: 1240px) 500px, (min-width: 768px) 90vw, 180vw"
+              sizes="(min-width: 1240px) 500px, 90vw"
               className={cn(
                 "plate-zoom object-cover",
                 outOfStock && "opacity-45"
@@ -138,24 +139,29 @@ function BestSellerCard({
             />
           ) : null}
         </div>
+        {/* Two-up cards are ~165px wide on a phone, which is not enough for
+            "BEST SELLER" and the COA chip to share the top row — they
+            collided. On phones the promo badge drops to the bottom of the
+            image (empty sweep under the vial) and the earned COA mark keeps
+            the top corner; from md both sit along the top, as designed. */}
         {badge ? (
-          <span className="absolute top-3 left-3 rounded-xs bg-navy px-[9px] py-[5px] text-[11px] font-extrabold tracking-[0.08em] text-white">
+          <span className="absolute bottom-2.5 left-2.5 rounded-xs bg-navy px-2 py-1 text-[10px] font-extrabold tracking-[0.06em] text-white md:top-3 md:bottom-auto md:left-3 md:px-[9px] md:py-[5px] md:text-[11px] md:tracking-[0.08em]">
             {badge}
           </span>
         ) : null}
         {product.coaUrl ? (
-          <span className="absolute top-3 right-3 rounded-xs border border-rule bg-white px-2 py-[5px] text-[11px] font-bold text-navy">
+          <span className="absolute top-2.5 right-2.5 rounded-xs border border-rule bg-white px-1.5 py-1 text-[10px] font-bold text-navy md:top-3 md:right-3 md:px-2 md:py-[5px] md:text-[11px]">
             {copy.coaChip} <span aria-hidden="true">✓</span>
           </span>
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col gap-2.5 p-4">
+      <div className="flex flex-1 flex-col gap-2.5 p-3 sm:p-4">
         <div>
-          <p className="text-[12px] font-semibold text-steel">
-            {[product.categoryName, size].filter(Boolean).join(" · ")}
-          </p>
-          <h3 className="mt-1 text-[17px] leading-[1.25] font-extrabold text-pretty text-navy-ink">
+          {size ? (
+            <p className="mb-1 text-[12px] font-semibold text-steel">{size}</p>
+          ) : null}
+          <h3 className="text-[15px] leading-[1.25] sm:text-[17px] font-extrabold text-pretty text-navy-ink">
             <Link
               href={href}
               className="text-navy-ink after:absolute after:inset-0 after:content-[''] hover:text-navy-ink focus-visible:outline-none"
@@ -168,9 +174,9 @@ function BestSellerCard({
           ) : null}
         </div>
 
-        <div className="mt-auto flex items-center justify-between gap-2">
-          <p className="flex items-baseline gap-2">
-            <span className="text-[20px] font-extrabold text-navy-ink tabular-nums">
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <p className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-[17px] font-extrabold sm:text-[20px] text-navy-ink tabular-nums">
               {variable
                 ? `${copy.fromPrefix} ${formatMinor(product.priceMinor, product.currencyMinorUnit)}`
                 : price}
@@ -251,10 +257,21 @@ export function BestSellers({ products }: { products: Product[] }) {
             {copy.heading}
           </h2>
         </div>
-        <p className="text-[14px] text-steel">{copy.note}</p>
+        {/* The homepage's route into the catalog now that the category grid
+            is gone — outlined, so it does not compete with the cobalt Add to
+            cart buttons in the grid below. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p className="text-[14px] text-steel">{copy.note}</p>
+          <Link
+            href="/catalog"
+            className="inline-flex h-11 items-center gap-2 rounded-lg border border-rule bg-white px-4 text-[14px] font-bold whitespace-nowrap text-navy transition-colors hover:border-cobalt hover:text-navy"
+          >
+            {copy.browseAll} <Arrow />
+          </Link>
+        </div>
       </div>
 
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4">
+      <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-[repeat(auto-fill,minmax(230px,1fr))]">
         {products.map((product) => (
           <li key={product.productId}>
             <BestSellerCard product={product} onAdded={showToast} />

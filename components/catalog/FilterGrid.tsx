@@ -2,7 +2,7 @@
 
 /**
  * FilterGrid — the client half of the catalog: sticky hairline filter bar
- * (category chips + search + sort) above a 3-up grid of specimen-plate
+ * (category chips + search + sort) above a 2-up (3-up ≥lg) grid of specimen-plate
  * ProductCards (D3 "Reference Grade").
  *
  * - Server pages fetch getCatalog() once and pass plain Product[] down.
@@ -24,8 +24,9 @@
  * on paper; active chip is navy-filled with mint count. Amber never appears
  * as text here.
  *
- * Sticky offset: the Header is `sticky top-0` at 68px (+1px rule), so this
- * bar pins at top-[68px] with a lower z-index (header z-40, bar z-30).
+ * Sticky offset: the Header is `sticky top-0` at 56px on phones and 68px from
+ * md, so this bar pins at the same stops with a lower z-index (header z-40,
+ * bar z-30).
  *
  * `?q=` (the header search) seeds the search box via UrlQuerySync.
  */
@@ -162,7 +163,7 @@ export function FilterGrid({
       </Suspense>
 
       {/* ── Sticky filter bar ──────────────────────────────────────────── */}
-      <div className="hairline-y sticky top-[68px] z-30 bg-bg">
+      <div className="hairline-y sticky top-14 z-30 bg-bg md:top-[68px]">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 md:px-6 lg:flex-row lg:items-center lg:gap-6">
           {showCategoryFilter && (
             <div
@@ -250,7 +251,7 @@ export function FilterGrid({
       {/* ── Specimen-plate grid ────────────────────────────────────────── */}
       <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16">
         {filtered.length > 0 ? (
-          <ul className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 md:gap-x-8 md:gap-y-12 lg:grid-cols-3">
+          <ul className="grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-6 sm:gap-y-10 md:gap-x-8 md:gap-y-12 lg:grid-cols-3">
             {filtered.map((p, i) => (
               <motion.li
                 key={p.productId}

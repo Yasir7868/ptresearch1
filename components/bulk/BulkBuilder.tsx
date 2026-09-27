@@ -257,7 +257,7 @@ export function BulkBuilder({ products }: { products: Product[] }) {
               {copy.empty}
             </p>
           ) : (
-            <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(260px,100%),1fr))] gap-5">
+            <ul className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-[repeat(auto-fill,minmax(260px,1fr))]">
               {visible.map((product) => (
                 <li key={product.productId}>
                   <BulkCard
@@ -562,17 +562,12 @@ function BulkCard({
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <div>
-          <h3 className="text-[16px] leading-tight font-extrabold text-navy-ink">
-            <Link href={`/product/${product.slug}`} className="text-navy-ink hover:text-cobalt">
-              {product.displayName}
-            </Link>
-          </h3>
-          <p className="mt-0.5 text-[13px] text-steel">
-            {bulkCategoryLabels[product.categorySlug] ?? product.categoryName}
-          </p>
-        </div>
+      <div className="flex flex-1 flex-col gap-3 p-3 sm:p-4">
+        <h3 className="text-[15px] leading-tight font-extrabold text-navy-ink sm:text-[16px]">
+          <Link href={`/product/${product.slug}`} className="text-navy-ink hover:text-cobalt">
+            {product.displayName}
+          </Link>
+        </h3>
 
         {/* Strength rows — the selected one is filled, as in the reference. */}
         <ul className="flex flex-col gap-2">
@@ -586,7 +581,7 @@ function BulkCard({
                   aria-pressed={active}
                   disabled={unavailable}
                   className={cn(
-                    "flex w-full cursor-pointer items-center justify-between gap-3 rounded-[10px] border px-3.5 py-2.5 text-[14px] font-bold transition-colors disabled:cursor-not-allowed",
+                    "flex w-full cursor-pointer items-center justify-between gap-2 rounded-[10px] border px-2.5 py-2.5 text-[13px] font-bold transition-colors disabled:cursor-not-allowed sm:gap-3 sm:px-3.5 sm:text-[14px]",
                     active
                       ? "border-navy-ink bg-navy-ink text-white"
                       : "border-rule bg-white text-navy-ink hover:border-navy"

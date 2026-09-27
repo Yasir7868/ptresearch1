@@ -7,7 +7,9 @@
  * (Catalog · Gift Card · Bulk Orders · COA / Lab Results · FAQ · Contact), and
  * on the right a product search (GET → /catalog?q=…, which FilterGrid reads),
  * "Track order", and the navy Cart button with its live count. Below lg the
- * nav, search and Track order move into a left sheet.
+ * nav, search and Track order move into a left sheet, and the row is lockup
+ * on the left with cart + menu grouped on the right (owner request
+ * 2026-09-28) — the cart shrinks to a 36px icon with the count as a badge.
  *
  * FITTING SIX NAV ITEMS ON ONE LINE. At 15px semibold the labels run 417px of
  * text (517px with gaps), and the row also carries the 126px lockup, the
@@ -31,15 +33,16 @@
  * Cart count uses useCartOptional(): renders 0 on the server and hydrates
  * after CartProvider loads localStorage — no hydration mismatch.
  *
- * Height is fixed at 68px (+1px rule); the catalog filter bar pins beneath it
- * (FilterGrid `top-[68px]`).
+ * Height: 56px on phones, 68px from md (+1px rule either way). The catalog
+ * filter bar pins beneath it and matches those stops (FilterGrid
+ * `top-14 md:top-[68px]`), as do the #coa / #faq scroll offsets.
  */
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import Form from "next/form";
-import { MenuIcon, SearchIcon } from "lucide-react";
+import { MenuIcon, SearchIcon, ShoppingCartIcon } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -81,7 +84,7 @@ function Logo({ className }: { className?: string }) {
       width={344}
       height={120}
       loading="eager"
-      className={cn("h-11 w-auto", className)}
+      className={cn("h-9 w-auto md:h-11", className)}
     />
   );
 }
@@ -131,17 +134,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-rule bg-white/92 font-manrope leading-[normal] backdrop-blur-[10px]">
-      <div className="mx-auto flex h-[68px] max-w-[1240px] items-center gap-3 px-4 md:px-6 lg:gap-6">
-        {/* Mobile menu */}
-        <button
-          type="button"
-          className="-ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-[10px] text-navy-ink transition-colors hover:bg-mist lg:hidden"
-          aria-label={redesignChrome.menu}
-          onClick={() => setMenuOpen(true)}
-        >
-          <MenuIcon className="size-5" />
-        </button>
-
+      <div className="mx-auto flex h-14 max-w-[1240px] items-center gap-3 md:h-[68px] px-4 md:px-6 lg:gap-6">
         <Link href="/" className="flex shrink-0 items-center">
           <Logo />
         </Link>
@@ -181,19 +174,42 @@ export function Header() {
           >
             {TRACK_ORDER.label}
           </Link>
+          {/* Cart: a compact icon below lg (phones read the glyph fine and
+              the row is tight), the design's "Cart n" button from lg. The
+              count rides the icon as a badge and sits inline in the button;
+              both are aria-hidden — the label carries the number. */}
           <button
             type="button"
-            className="flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-[10px] bg-navy px-4 text-[14px] font-bold text-white transition-colors hover:bg-cobalt"
+            className="relative flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-[10px] bg-navy text-[14px] font-bold text-white transition-colors hover:bg-cobalt lg:size-auto lg:h-11 lg:gap-2 lg:px-4"
             aria-label={`Open cart, ${count} ${count === 1 ? "item" : "items"}`}
             onClick={() => setCartOpen(true)}
           >
-            {redesignChrome.cart}
+            <ShoppingCartIcon aria-hidden="true" className="size-[18px] lg:hidden" />
+            <span className="hidden lg:inline">{redesignChrome.cart}</span>
+            {count > 0 ? (
+              <span
+                aria-hidden="true"
+                className="absolute -top-1 -right-1 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-cobalt px-1 text-[10px] leading-none text-white ring-2 ring-white tabular-nums lg:hidden"
+              >
+                {count > 99 ? "99+" : count}
+              </span>
+            ) : null}
             <span
               aria-hidden="true"
-              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[12px] text-navy tabular-nums"
+              className="hidden h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[12px] text-navy tabular-nums lg:inline-flex"
             >
               {count > 99 ? "99+" : count}
             </span>
+          </button>
+
+          {/* Menu — last, so the tap targets sit together on the right. */}
+          <button
+            type="button"
+            className="-mr-1.5 inline-flex size-10 shrink-0 items-center justify-center rounded-[10px] text-navy-ink transition-colors hover:bg-mist lg:hidden"
+            aria-label={redesignChrome.menu}
+            onClick={() => setMenuOpen(true)}
+          >
+            <MenuIcon className="size-5" />
           </button>
         </div>
       </div>

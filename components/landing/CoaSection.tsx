@@ -57,7 +57,7 @@ export function CoaSection({ products }: { products: Product[] }) {
   const batch = featured ? batchFor(featured) : null;
 
   return (
-    <section id="coa" className="scroll-mt-[69px] border-y border-rule bg-white">
+    <section id="coa" className="scroll-mt-[57px] md:scroll-mt-[69px] border-y border-rule bg-white">
       <div
         className={cn(
           CONTAINER,

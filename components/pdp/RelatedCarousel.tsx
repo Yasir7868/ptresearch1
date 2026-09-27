@@ -2,7 +2,8 @@
 
 /**
  * RelatedCarousel — the live "Related Products" loop carousel: four cards per
- * view on desktop, two on tablet (≤1024px), one on phones (≤767px), 10px
+ * view on desktop, two on tablet and phones (≤1024px; phones were one until
+ * the owner's two-column request, 2026-09-27), 10px
  * apart; loops forever, slides every 5 s (paused while hovered, stopped for
  * good once the visitor uses the arrows, dots or a swipe), 500ms slides, faint
  * chevron arrows inside and dots below.
@@ -98,7 +99,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
             width={512}
             height={768}
             draggable={false}
-            sizes="(min-width: 1025px) 25vw, (min-width: 768px) 48vw, 92vw"
+            sizes="(min-width: 1025px) 25vw, 48vw"
             className="block h-[280px] w-full scale-[1.6] object-contain md:h-[360px]"
           />
         ) : null}
@@ -110,7 +111,7 @@ function RelatedCard({ item }: { item: RelatedItem }) {
         </Link>
       </h3>
 
-      <div className="flex items-center justify-between gap-3 max-md:justify-center">
+      <div className="flex items-center justify-between gap-3 max-md:flex-col max-md:justify-center">
         <LivePrice
           view={priceView(item)}
           className="font-roboto text-[15px] leading-[1.1] font-bold text-[#2c4d82]"
@@ -233,7 +234,7 @@ export function RelatedCarousel({ items, label }: { items: RelatedItem[]; label:
       onPointerLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
-      className="[--per-view:1] md:[--per-view:2] lg:[--per-view:4]"
+      className="[--per-view:2] lg:[--per-view:4]"
     >
       <div className="relative">
         <div

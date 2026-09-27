@@ -1,6 +1,13 @@
 /**
  * TrustStrip — the white strip under the hero: four short trust lines, each
- * behind a cobalt dot. Copy: redesignHome.trustStrip. Server component.
+ * behind a cobalt dot. Copy: redesignHome.trustStrip.
+ *
+ * Hidden on phones (owner request 2026-09-27), where it stacked into four
+ * full-width rows right under a height-capped hero; it returns at md. The
+ * same ground is covered further down by the COA section and the four
+ * trust-badge cards, so nothing here is mobile-only information.
+ *
+ * Server component.
  */
 
 import { redesignHome } from "@/content/site-copy";
@@ -9,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 export function TrustStrip() {
   return (
-    <section className="border-b border-rule bg-white">
+    <section className="hidden border-b border-rule bg-white md:block">
       <ul
         className={cn(
           CONTAINER,
